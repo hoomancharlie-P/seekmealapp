@@ -149,18 +149,19 @@ CRITICAL：
     // Convert conversation history to Gemini format
     // CRITICAL: First message MUST be 'user' role, not 'model'
     // Filter and convert conversation history
-    let history: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
+    type HistoryItem = { role: 'user' | 'model'; parts: Array<{ text: string }> }
+    let history: HistoryItem[] = []
     
     if (conversationHistory && conversationHistory.length > 0) {
       // Convert to Gemini format
-      const converted = conversationHistory
+      const converted: HistoryItem[] = conversationHistory
         .slice(-5) // Take last 5 messages
         .map((msg: Message) => ({
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }]
         }))
       
-      console.log('Converted history roles:', converted.map((h: { role: string }) => h.role))
+      console.log('Converted history roles:', converted.map((h: HistoryItem) => h.role))
       
       // Remove any leading 'model' messages (Gemini requires 'user' first)
       let startIndex = 0
@@ -179,7 +180,7 @@ CRITICAL：
     }
     
     console.log('Final history length:', history.length)
-    console.log('Final history roles:', history.map((h: { role: string }) => h.role))
+    console.log('Final history roles:', history.map((h: HistoryItem) => h.role))
     
     // Try models in order. If a model has free-tier quota limit 0, fallback to another.
     let lastError: unknown = undefined
