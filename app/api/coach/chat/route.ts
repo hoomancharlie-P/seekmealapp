@@ -161,8 +161,6 @@ CRITICAL：
           parts: [{ text: msg.content }]
         }))
       
-      console.log('Converted history roles:', converted.map((h: { role: 'user' | 'model' }) => h.role))
-      
       // Remove any leading 'model' messages (Gemini requires 'user' first)
       let startIndex = 0
       while (startIndex < converted.length && converted[startIndex].role === 'model') {
@@ -180,7 +178,6 @@ CRITICAL：
     }
     
     console.log('Final history length:', history.length)
-    console.log('Final history roles:', history.map((h: { role: 'user' | 'model' }) => h.role))
     
     // Try models in order. If a model has free-tier quota limit 0, fallback to another.
     let lastError: unknown = undefined
