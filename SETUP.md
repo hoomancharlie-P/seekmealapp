@@ -31,10 +31,10 @@ cp .env.example .env.local
 然後編輯 `.env.local` 檔案，填入你的 API 金鑰：
 
 ```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://qogzodwtrsuuemnoliuq.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvZ3pvZHd0cnN1dWVtbm9saXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwMjg4MDksImV4cCI6MjA4MzYwNDgwOX0.Hkqoeg1Qf2LVi056XKA09gPq8_BXLs9lf0SG8X7J9lU
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvZ3pvZHd0cnN1dWVtbm9saXVxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODAyODgwOSwiZXhwIjoyMDgzNjA0ODA5fQ.zGL8OHy2T25lhigVRCf4sYcoAJ0JL_vPm23sguY7s2M
+# Supabase（請從 Supabase 專案 Settings → API 取得）
+NEXT_PUBLIC_SUPABASE_URL=https://你的專案ID.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=你的_anon_public_金鑰
+SUPABASE_SERVICE_ROLE_KEY=你的_service_role_金鑰
 
 
 # Claude API
