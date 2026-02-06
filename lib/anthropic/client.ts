@@ -45,7 +45,7 @@ export async function callClaude(
       max_tokens: options?.maxTokens || 1024,
       system: options?.system,
       temperature: options?.temperature,
-      messages,
+      messages: messages as any,
     })
 
     // Extract text content from the response

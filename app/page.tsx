@@ -17,6 +17,9 @@ import { useAuth } from '@/app/hooks/useAuth'
 import { useStreak } from '@/app/hooks/useStreak'
 import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/types/database'
+
+/** 使用 any 繞過 Supabase 客戶端泛型推斷為 never 的型別問題 */
+const db = supabase as any
 import BottomNav from '@/components/BottomNav'
 import MealCardSkeleton from '@/components/MealCardSkeleton'
 import toast from 'react-hot-toast'
@@ -128,7 +131,7 @@ export default function Home() {
     const fetchProfile = async () => {
       try {
         setLoadingProfile(true)
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+        const { data, error } = await db.from('profiles').select('*').eq('id', user.id).single()
         if (error) throw error
         setProfile(data)
       } catch (error) {
@@ -153,7 +156,7 @@ export default function Home() {
 
     const probe = async () => {
       try {
-        const { error } = await supabase
+        const { error } = await db
           .from('meals')
           .select('special_event_ai_suggestions')
           .eq('user_id', user.id)
@@ -223,8 +226,8 @@ export default function Home() {
     try {
       console.log('🎲 Quick generating meal...')
       
-      // 快速生成直接使用「自己煮」，嚴格符合營養目標
-      const location = 'home_cook'
+      // 快速生成直接使用「自己煮」，嚴格符合營養目標（斷言為聯合型別以通過 TS 比較檢查）
+      const location = 'home_cook' as 'home_cook' | 'eating_out'
       
       // 計算目標卡路里
       const mealTarget = replacingMeal.calories
@@ -386,13 +389,13 @@ export default function Home() {
     if (!newMeal?.foods?.length) {
       throw new Error('餐單沒有食物資料，請重試')
     }
-    const { error: delErr } = await supabase
+    const { error: delErr } = await db
       .from('foods')
       .delete()
       .eq('meal_id', oldMeal.id)
     if (delErr) throw delErr
 
-    const { error: updErr } = await supabase
+    const { error: updErr } = await db
       .from('meals')
       .update({
         calories: newMeal.calories,
@@ -414,7 +417,7 @@ export default function Home() {
       fiber: Number(food.fiber) || 0,
       order: index
     }))
-    const { error: insErr } = await supabase
+    const { error: insErr } = await db
       .from('foods')
       .insert(foodsToInsert)
     if (insErr) throw insErr
@@ -430,7 +433,7 @@ export default function Home() {
       const newCalories = Math.max(50, mealToAdjust.calories - adj.reduction)
       const ratio = newCalories / mealToAdjust.calories
       
-      await supabase
+      await db
         .from('meals')
         .update({
           calories: newCalories,
@@ -448,13 +451,13 @@ export default function Home() {
     if (!newMeal?.foods?.length) {
       throw new Error('餐單沒有食物資料，請重試')
     }
-    const { error: delErr } = await supabase
+    const { error: delErr } = await db
       .from('foods')
       .delete()
       .eq('meal_id', oldMeal.id)
     if (delErr) throw delErr
 
-    const { error: updErr } = await supabase
+    const { error: updErr } = await db
       .from('meals')
       .update({
         calories: newMeal.calories,
@@ -476,7 +479,7 @@ export default function Home() {
       fiber: Number(food.fiber) || 0,
       order: index
     }))
-    const { error: insErr } = await supabase
+    const { error: insErr } = await db
       .from('foods')
       .insert(foodsToInsert)
     if (insErr) throw insErr
@@ -594,7 +597,7 @@ export default function Home() {
   }
 
   const handleApplyOption = async (option: any, adjustment: 'adjust' | 'keep') => {
-    if (!replacingMeal || isApplyingOption) return
+    if (!user || !replacingMeal || isApplyingOption) return
     setIsApplyingOption(true)
     try {
       console.log('💾 Applying option with adjustment:', adjustment)
@@ -748,7 +751,7 @@ export default function Home() {
                 fiber: f.fiber
              }))
              
-             const { error } = await supabase.from('foods').insert(foodsToInsert)
+             const { error } = await db.from('foods').insert(foodsToInsert)
              if (error) throw error
              
              await refreshMealData(managingFoods.meal.id)
@@ -917,7 +920,7 @@ export default function Home() {
       })
       
       // 1. 刪除原有的 foods
-      const { error: deleteFoodsError } = await supabase
+      const { error: deleteFoodsError } = await db
         .from('foods')
         .delete()
         .eq('meal_id', meal.id)
@@ -930,7 +933,7 @@ export default function Home() {
       console.log('✅ Deleted old foods')
       
       // 2. 更新 meal
-      const { error: updateMealError } = await supabase
+      const { error: updateMealError } = await db
         .from('meals')
         .update({
           calories: totalCalories,
@@ -962,7 +965,7 @@ export default function Home() {
         order: index
       }))
       
-      const { error: insertFoodsError } = await supabase
+      const { error: insertFoodsError } = await db
         .from('foods')
         .insert(foodsToInsert)
       
@@ -1178,7 +1181,7 @@ export default function Home() {
 
       const datesToGenerate: string[] = []
       for (const date of datesToCheck) {
-        const { data: meals } = await supabase
+        const { data: meals } = await db
           .from('meals')
           .select('id')
           .eq('user_id', user.id)
@@ -1351,7 +1354,7 @@ export default function Home() {
           // 只有在確實沒有任何未來餐單且非旅遊模式時才生成預設餐單
           // 2a. 刪除所有過期未使用的餐單
           console.log('🗑️ Deleting expired unused meals...')
-          const { error: deleteError } = await supabase
+          const { error: deleteError } = await db
             .from('meals')
             .delete()
             .eq('user_id', user.id)
@@ -2071,7 +2074,7 @@ export default function Home() {
 
     try {
       // 刪除食物
-      const { error } = await supabase
+      const { error } = await db
         .from('foods')
         .delete()
         .eq('id', foodId)
@@ -2095,7 +2098,7 @@ export default function Home() {
     
     try {
       // 獲取當前餐單的最大 order 值
-      const { data: existingFoods } = await supabase
+      const { data: existingFoods } = await db
         .from('foods')
         .select('order')
         .eq('meal_id', managingFoods.meal.id)
@@ -2118,7 +2121,7 @@ export default function Home() {
         order: maxOrder + 1
       }
       
-      const { error } = await supabase
+      const { error } = await db
         .from('foods')
         .insert(foodToInsert)
       
@@ -2152,20 +2155,20 @@ export default function Home() {
     const endDateStr = endDate.toISOString().split('T')[0]
     
     // 1. 先獲取最新的 foods 列表來計算營養
-    const { data: foods } = await supabase
+    const { data: foods } = await db
       .from('foods')
       .select('*')
       .eq('meal_id', mealId)
     
     if (foods) {
-      const totalCalories = foods.reduce((sum, f) => sum + f.calories, 0)
-      const totalProtein = foods.reduce((sum, f) => sum + f.protein, 0)
-      const totalCarbs = foods.reduce((sum, f) => sum + f.carbs, 0)
-      const totalFat = foods.reduce((sum, f) => sum + f.fat, 0)
-      const totalFiber = foods.reduce((sum, f) => sum + f.fiber, 0)
+      const totalCalories = foods.reduce((sum: number, f: { calories: number }) => sum + f.calories, 0)
+      const totalProtein = foods.reduce((sum: number, f: { protein: number }) => sum + f.protein, 0)
+      const totalCarbs = foods.reduce((sum: number, f: { carbs: number }) => sum + f.carbs, 0)
+      const totalFat = foods.reduce((sum: number, f: { fat: number }) => sum + f.fat, 0)
+      const totalFiber = foods.reduce((sum: number, f: { fiber: number }) => sum + f.fiber, 0)
       
       // 2. 更新 Meal
-      await supabase.from('meals').update({
+      await db.from('meals').update({
         calories: totalCalories,
         protein: totalProtein,
         carbs: totalCarbs,
@@ -4462,7 +4465,7 @@ export default function Home() {
                           }
                           
                           // 獲取當前餐單的最大 order 值
-                          const { data: existingFoods } = await supabase
+                          const { data: existingFoods } = await db
                             .from('foods')
                             .select('order')
                             .eq('meal_id', managingFoods.meal.id)
@@ -4485,7 +4488,7 @@ export default function Home() {
                             order: maxOrder + 1 + index
                           }))
                           
-                          const { error } = await supabase
+                          const { error } = await db
                             .from('foods')
                             .insert(foodsToInsert)
                           

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/meals?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
  * 服務端取得當前用戶的餐單（含 foods），供主頁等頁面使用，避免瀏覽器直連 Supabase 造成 CORS/502。
@@ -44,7 +46,8 @@ export async function GET(request: NextRequest) {
       userId = user.id
     }
 
-    const { data: meals, error: mealsError } = await supabase
+    const db = supabase as any
+    const { data: meals, error: mealsError } = await db
       .from('meals')
       .select('*')
       .eq('user_id', userId)
@@ -62,7 +65,7 @@ export async function GET(request: NextRequest) {
     }
 
     const mealIds = meals.map((m: { id: string }) => m.id)
-    const { data: foods, error: foodsError } = await supabase
+    const { data: foods, error: foodsError } = await db
       .from('foods')
       .select('*')
       .in('meal_id', mealIds)

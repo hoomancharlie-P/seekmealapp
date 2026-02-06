@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Area, ComposedChart, ResponsiveContainer } from 'recharts'
 
+const db = supabase as any
+type WeightLogRow = { date: string; weight: number }
+
 interface WeightPredictionChartProps {
   userId: string
   profile: any
@@ -20,7 +23,7 @@ export default function WeightPredictionChart({ userId, profile }: WeightPredict
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       
-      const { data: weightLogs, error } = await supabase
+      const { data: weightLogsRaw, error } = await db
         .from('weight_logs')
         .select('*')
         .eq('user_id', userId)
@@ -28,8 +31,9 @@ export default function WeightPredictionChart({ userId, profile }: WeightPredict
         .order('date', { ascending: true })
       
       if (error) throw error
+      const weightLogs = (weightLogsRaw ?? []) as WeightLogRow[]
       
-      if (!weightLogs || weightLogs.length === 0) {
+      if (!weightLogs.length) {
         // 沒有體重記錄
         setData([])
         setLoading(false)
@@ -53,15 +57,15 @@ export default function WeightPredictionChart({ userId, profile }: WeightPredict
         }
       }
       if (!targetWeight && weightLogs.length > 0) {
-        targetWeight = parseFloat(weightLogs[weightLogs.length - 1].weight)
+        targetWeight = Number(weightLogs[weightLogs.length - 1].weight)
       }
       
       // 3. 組合圖表數據
       const chartData = [
         // 實際記錄
-        ...weightLogs.map(log => ({
+        ...weightLogs.map((log: WeightLogRow) => ({
           date: new Date(log.date).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' }),
-          actual: parseFloat(log.weight),
+          actual: Number(log.weight),
           predicted: null,
           upperBound: null,
           lowerBound: null,

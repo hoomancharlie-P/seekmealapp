@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -66,7 +66,7 @@ function FoodNameRotator({ destination }: { destination: string }) {
   )
 }
 
-export default function TravelWaitingPage() {
+function TravelWaitingPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAuth()
@@ -201,8 +201,9 @@ export default function TravelWaitingPage() {
       return
     }
     
-    // 如果已經出錯或完成，不繼續檢查
-    if (stage === 'error' || stage === 'completed') {
+    // 如果已經出錯或完成，不繼續檢查（斷言以通過 TS 比較，stage 可能因閉包而與外層不同）
+    const s = stage as 'generating' | 'error' | 'completed'
+    if (s === 'error' || s === 'completed') {
       return
     }
     
@@ -560,5 +561,13 @@ export default function TravelWaitingPage() {
           )}
         </motion.div>
       </div>
+  )
+}
+
+export default function TravelWaitingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">載入中...</div>}>
+      <TravelWaitingPageContent />
+    </Suspense>
   )
 }

@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import AuthGuard from '@/components/AuthGuard'
 
-export default function TravelCompletedPage() {
+function TravelCompletedPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const destination = searchParams.get('destination')
@@ -64,5 +64,13 @@ export default function TravelCompletedPage() {
         </motion.div>
       </div>
     </AuthGuard>
+  )
+}
+
+export default function TravelCompletedPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">載入中...</div>}>
+      <TravelCompletedPageContent />
+    </Suspense>
   )
 }

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 
+const db = supabase as any
+
 function toLocalDateStr(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -43,7 +45,7 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
       const weekEndStr = toLocalDateStr(weekEnd)
       const todayStr = toLocalDateStr(today)
 
-      const { data: meals, error } = await supabase
+      const { data: meals, error } = await db
         .from('meals')
         .select('date, calories, consumed')
         .eq('user_id', userId)
@@ -60,8 +62,9 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
         date.setDate(weekStart.getDate() + i)
         const dateStr = toLocalDateStr(date)
 
-        const dayMeals = meals?.filter(m => m.date === dateStr && m.consumed) || []
-        const totalCalories = dayMeals.reduce((sum, m) => sum + (m.calories || 0), 0)
+        type MealRow = { date: string; consumed: boolean; calories?: number }
+        const dayMeals = (meals as MealRow[] | null)?.filter(m => m.date === dateStr && m.consumed) || []
+        const totalCalories = dayMeals.reduce((sum: number, m: MealRow) => sum + (m.calories || 0), 0)
         const target = profile?.calorie_target || 2000
         const percentage = totalCalories > 0 ? (totalCalories / target) * 100 : 0
 

@@ -1,12 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-// 客戶端（用於 client components）
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
-
-// 類型定義
+// 類型定義（必須在 createClient 之前，供泛型使用）
 export type Database = {
   public: {
     Tables: {
@@ -24,6 +18,12 @@ export type Database = {
           dietary_restrictions: string[]
           dietary_habit: string
           allergies: string[]
+          gender: string | null
+          age: number | null
+          height: number | null
+          weight: number | null
+          activity_level: string | null
+          goal: string | null
         }
         Insert: {
           id: string
@@ -38,6 +38,12 @@ export type Database = {
           dietary_restrictions?: string[]
           dietary_habit?: string
           allergies?: string[]
+          gender?: string | null
+          age?: number | null
+          height?: number | null
+          weight?: number | null
+          activity_level?: string | null
+          goal?: string | null
         }
         Update: {
           id?: string
@@ -51,6 +57,12 @@ export type Database = {
           dietary_restrictions?: string[]
           dietary_habit?: string
           allergies?: string[]
+          gender?: string | null
+          age?: number | null
+          height?: number | null
+          weight?: number | null
+          activity_level?: string | null
+          goal?: string | null
         }
       }
       meals: {
@@ -157,3 +169,8 @@ export type Database = {
   }
 }
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+// 客戶端（用於 client components）
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)

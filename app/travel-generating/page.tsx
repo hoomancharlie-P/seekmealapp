@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import AuthGuard from '@/components/AuthGuard'
 
-export default function TravelGeneratingPage() {
+function TravelGeneratingPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState('正在生成旅遊餐單...')
@@ -82,5 +82,13 @@ export default function TravelGeneratingPage() {
         </motion.div>
       </div>
     </AuthGuard>
+  )
+}
+
+export default function TravelGeneratingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">載入中...</div>}>
+      <TravelGeneratingPageContent />
+    </Suspense>
   )
 }

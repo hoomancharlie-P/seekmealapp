@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/app/hooks/useAuth'
+
+const db = supabase as any
 import AuthGuard from '@/components/AuthGuard'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -14,7 +16,7 @@ type Gender = 'male' | 'female'
 type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active'
 type Goal = 'lose' | 'maintain' | 'gain'
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -86,7 +88,7 @@ export default function SettingsPage() {
 
     const fetchProfile = async () => {
       try {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+        const { data, error } = await db.from('profiles').select('*').eq('id', user.id).single()
 
         if (error) throw error
 
@@ -694,7 +696,7 @@ export default function SettingsPage() {
 
     setSaving(true)
     try {
-      const { error } = await supabase.from('profiles').update({ username }).eq('id', user.id)
+      const { error } = await db.from('profiles').update({ username }).eq('id', user.id)
 
       if (error) throw error
 
@@ -770,7 +772,7 @@ export default function SettingsPage() {
 
       // 定義保存操作（只保存 profile）
       const saveProfileOnly = async () => {
-        const { error } = await supabase
+        const { error } = await db
           .from('profiles')
           .update({
             calorie_target: calorieTarget,
@@ -808,7 +810,7 @@ export default function SettingsPage() {
       // 定義保存並重新生成操作（旅遊模式下改為 PUT travel-mode 重新生成旅遊餐單，不刪餐單）
       const saveAndRegenerate = async () => {
         // 先保存 profile
-        const { error } = await supabase
+        const { error } = await db
           .from('profiles')
           .update({
             calorie_target: calorieTarget,
@@ -1156,19 +1158,19 @@ export default function SettingsPage() {
                 </div>
                 
                 {/* 飲食偏好顯示 */}
-                {(profile?.dietary_restrictions?.length > 0 || 
+                {((profile?.dietary_restrictions?.length ?? 0) > 0 || 
                   profile?.dietary_habit !== 'none' || 
-                  profile?.allergies?.length > 0) && (
+                  (profile?.allergies?.length ?? 0) > 0) && (
                   <>
                     <div className="border-t border-gray-200 my-4" />
                     <h3 className="font-semibold text-gray-900 mb-3">飲食偏好</h3>
                     
                     <div className="space-y-2 text-sm">
-                      {profile.dietary_restrictions && profile.dietary_restrictions.length > 0 && (
+                      {profile?.dietary_restrictions && profile.dietary_restrictions.length > 0 && (
                         <div className="flex items-start gap-2">
                           <span className="text-gray-600 whitespace-nowrap">不吃：</span>
                           <span className="text-gray-900">
-                            {profile.dietary_restrictions.map(r => {
+                            {profile.dietary_restrictions.map((r: string) => {
                               const names: Record<string, string> = {
                                 beef: '牛肉',
                                 pork: '豬肉',
@@ -1185,7 +1187,7 @@ export default function SettingsPage() {
                         </div>
                       )}
                       
-                      {profile.dietary_habit && profile.dietary_habit !== 'none' && (
+                      {profile?.dietary_habit && profile.dietary_habit !== 'none' && (
                         <div className="flex items-start gap-2">
                           <span className="text-gray-600 whitespace-nowrap">飲食習慣：</span>
                           <span className="text-gray-900">
@@ -1195,13 +1197,13 @@ export default function SettingsPage() {
                                 low_carb: '低碳水',
                                 keto: '生酮飲食'
                               }
-                              return habits[profile.dietary_habit] || profile.dietary_habit
+                              return habits[profile?.dietary_habit ?? ''] || profile?.dietary_habit
                             })()}
                           </span>
                         </div>
                       )}
                       
-                      {profile.allergies && profile.allergies.length > 0 && (
+                      {profile?.allergies && profile.allergies.length > 0 && (
                         <div className="flex items-start gap-2">
                           <span className="text-gray-600 whitespace-nowrap">過敏：</span>
                           <span className="text-gray-900">{profile.allergies.join('、')}</span>
@@ -1934,3 +1936,10 @@ export default function SettingsPage() {
   )
 }
 
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">載入中...</div>}>
+      <SettingsPageContent />
+    </Suspense>
+  )
+}

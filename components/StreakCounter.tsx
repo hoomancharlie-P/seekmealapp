@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import confetti from 'canvas-confetti'
 
+const db = supabase as any
+
 function toLocalDateStr(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -31,7 +33,7 @@ export default function StreakCounter({ userId, targetCalories }: StreakCounterP
       hundredDaysAgo.setDate(hundredDaysAgo.getDate() - 100)
       const startStr = toLocalDateStr(hundredDaysAgo)
 
-      const { data: meals, error } = await supabase
+      const { data: meals, error } = await db
         .from('meals')
         .select('date, calories, consumed')
         .eq('user_id', userId)
@@ -49,7 +51,7 @@ export default function StreakCounter({ userId, targetCalories }: StreakCounterP
       }
 
       const dailyTotals: Record<string, number> = {}
-      meals.forEach(meal => {
+      meals.forEach((meal: { date: string; calories?: number }) => {
         if (!dailyTotals[meal.date]) dailyTotals[meal.date] = 0
         dailyTotals[meal.date] += meal.calories || 0
       })

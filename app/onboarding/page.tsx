@@ -253,8 +253,8 @@ export default function OnboardingPage() {
       console.log('Dietary habit:', dietaryHabit)
       console.log('Allergies:', allergyList)
 
-      // 更新 profile
-      const { error } = await supabase
+      // 更新 profile（Supabase 客戶端泛型推斷為 never 時用 any 繞過型別檢查）
+      const { error } = await (supabase as any)
         .from('profiles')
         .update({
           calorie_target: calorieTarget,
@@ -266,9 +266,9 @@ export default function OnboardingPage() {
           dietary_habit: dietaryHabit,
           allergies: allergyList,
           gender: gender,
-          age: parseInt(age),
-          height: parseFloat(height),
-          weight: parseFloat(weight),
+          age: parseInt(age, 10) || null,
+          height: parseFloat(height) || null,
+          weight: parseFloat(weight) || null,
           activity_level: activityLevel,
           goal: goal
         })

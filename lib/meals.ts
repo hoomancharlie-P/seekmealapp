@@ -1,13 +1,15 @@
 import { supabase } from './supabase'
 import type { Meal, Food } from '@/types/database'
 
+const db = supabase as any
+
 export type MealWithFoods = Meal & { foods: Food[] }
 
 // 讀取用戶的餐單（指定日期範圍）
 export async function fetchMeals(userId: string, startDate: string, endDate: string): Promise<MealWithFoods[]> {
   try {
     // 1. 讀取餐單
-    const { data: meals, error: mealsError } = await supabase
+    const { data: meals, error: mealsError } = await db
       .from('meals')
       .select('*')
       .eq('user_id', userId)
@@ -23,7 +25,7 @@ export async function fetchMeals(userId: string, startDate: string, endDate: str
 
     // 2. 讀取所有餐單的食物
     const mealIds = meals.map((m: any) => m.id)
-    const { data: foods, error: foodsError } = await supabase
+    const { data: foods, error: foodsError } = await db
       .from('foods')
       .select('*')
       .in('meal_id', mealIds)
@@ -47,7 +49,7 @@ export async function fetchMeals(userId: string, startDate: string, endDate: str
 // 更新餐次（記錄/取消記錄）
 export async function updateMealConsumed(mealId: string, consumed: boolean, consumedAt: string | null) {
   try {
-    const { error } = await supabase
+    const { error } = await db
       .from('meals')
       .update({
         consumed,
@@ -67,7 +69,7 @@ export async function updateMealConsumed(mealId: string, consumed: boolean, cons
 export async function updateMeals(mealsToUpdate: Array<{ id: string; updates: Record<string, any> }>) {
   try {
     const promises = mealsToUpdate.map(({ id, updates }) =>
-      supabase
+      db
         .from('meals')
         .update(updates as any)
         .eq('id', id)
@@ -91,7 +93,7 @@ export async function updateMeals(mealsToUpdate: Array<{ id: string; updates: Re
 export async function updateFoods(foodsToUpdate: Array<{ id: string; updates: Record<string, any> }>) {
   try {
     const promises = foodsToUpdate.map(({ id, updates }) =>
-      supabase
+      db
         .from('foods')
         .update(updates as any)
         .eq('id', id)
@@ -132,7 +134,7 @@ export async function createInitialMeals(
     let userProfile = profile
     if (!userProfile) {
       console.log('📖 Reading profile from database...')
-      const { data } = await supabase
+      const { data } = await db
         .from('profiles')
         .select('calorie_target, protein_target, carbs_target, fat_target, fiber_target, dietary_restrictions, dietary_habit, allergies')
         .eq('id', userId)
@@ -144,6 +146,8 @@ export async function createInitialMeals(
 
       userProfile = data
     }
+
+    if (!userProfile) throw new Error('Profile not found')
 
     console.log('📊 User profile:', userProfile)
     console.log('🍽️ Dietary preferences:', {
@@ -274,10 +278,10 @@ export async function createInitialMeals(
     console.log('📋 First meal (without id):', { ...mealsToInsert[0], id: '(will be generated)' })
 
     // === 過濾已存在的餐單 ===
-    const datesToCheck = [...new Set(mealsToInsert.map(m => m.date))]
+    const datesToCheck = Array.from(new Set(mealsToInsert.map(m => m.date)))
     console.log('🔍 Checking existing meals for dates:', datesToCheck)
     
-    const { data: existingMeals, error: checkError } = await supabase
+    const { data: existingMeals, error: checkError } = await db
       .from('meals')
       .select('date, type')
       .eq('user_id', userId)
@@ -289,7 +293,7 @@ export async function createInitialMeals(
       // 這裡選擇繼續，讓數據庫約束來處理
     }
     
-    const existingSet = new Set(existingMeals?.map(m => `${m.date}-${m.type}`) || [])
+    const existingSet = new Set((existingMeals as { date: string; type: string }[] | null)?.map(m => `${m.date}-${m.type}`) || [])
     console.log('🔍 Existing meals found:', existingSet.size)
     
     const finalMealsToInsert: any[] = []
@@ -323,7 +327,7 @@ export async function createInitialMeals(
 
     // 插入 meals（讓 Supabase 自動生成 UUID）
     console.log('💾 Inserting meals to Supabase...')
-    const { data: insertedMeals, error: mealsError } = await supabase
+    const { data: insertedMeals, error: mealsError } = await db
       .from('meals')
       .insert(finalMealsToInsert as any)
       .select()
@@ -396,7 +400,7 @@ export async function createInitialMeals(
       console.log('📋 First 3 foods to insert:', JSON.stringify(foodsToInsert.slice(0, 3), null, 2))
 
       try {
-        const { data: insertedFoods, error: foodsError } = await supabase
+        const { data: insertedFoods, error: foodsError } = await db
           .from('foods')
           .insert(foodsToInsert as any)
           .select()

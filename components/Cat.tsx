@@ -104,7 +104,7 @@ export default function Cat({
       setCurrentExpression(expression)
       
     const config = expressionConfig[expression]
-    if (config.duration) {
+    if ('duration' in config && config.duration) {
         const timer = setTimeout(() => {
             setCurrentExpression('neutral')
       }, config.duration)

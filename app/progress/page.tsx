@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+
+const db = supabase as any
 import { motion } from 'framer-motion'
 import BottomNav from '@/components/BottomNav'
 import WeightPredictionChart from '@/components/WeightPredictionChart'
@@ -182,7 +184,7 @@ export default function ProgressPage() {
     
     setSavingWeight(true)
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('weight_logs')
         .upsert({
           user_id: user.id,
