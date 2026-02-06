@@ -213,8 +213,11 @@ export default function Home() {
   // === 智能餐單推薦處理函數 (Task 6.6) ===
   
   const handleQuickGenerate = async () => {
-    if (!user || !profile || !replacingMeal) return
-    
+    if (!user || !profile || !replacingMeal) {
+      toast.error('資料載入中，請稍候再試')
+      return
+    }
+
     setQuickGenerating(true)
     
     try {
@@ -1486,7 +1489,7 @@ export default function Home() {
     }
 
     loadMeals()
-  }, [user, hasDbAiSuggestionsColumn, authLoading, travelMode, travelPlan])
+  }, [user, profile, hasDbAiSuggestionsColumn, authLoading, travelMode, travelPlan])
 
   // 顯示用戶名（優先用 username，沒有就用郵箱前綴）
   const displayName = profile?.username || user?.email?.split('@')[0] || '用戶'

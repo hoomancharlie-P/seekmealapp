@@ -1,0 +1,5 @@
+# 不讓 Cursor / Agent 讀取環境變數與密鑰
+.env
+.env.*
+.env.local
+.env.*.local

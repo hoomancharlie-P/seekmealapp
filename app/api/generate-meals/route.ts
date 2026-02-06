@@ -431,8 +431,9 @@ JSON 結構：
     }
 
     // 計算平均（用於統計）
-    const totals = mealsData.meals.reduce(
-      (acc: any, meal: any) => ({
+    type NutritionTotals = { calories: number; protein: number; carbs: number; fat: number; fiber: number }
+    const totals = mealsData.meals.reduce<NutritionTotals>(
+      (acc, meal: any) => ({
         calories: acc.calories + (meal.calories || 0),
         protein: acc.protein + (meal.protein || 0),
         carbs: acc.carbs + (meal.carbs || 0),
