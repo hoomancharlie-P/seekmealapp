@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Area, ComposedChart, ResponsiveContainer } from 'recharts'
 
@@ -14,11 +14,7 @@ export default function WeightPredictionChart({ userId, profile }: WeightPredict
   const [loading, setLoading] = useState(true)
   const [prediction, setPrediction] = useState<any>(null)
   
-  useEffect(() => {
-    loadData()
-  }, [userId])
-  
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       // 1. 獲取過去 30 天體重記錄
       const thirtyDaysAgo = new Date()
@@ -89,7 +85,11 @@ export default function WeightPredictionChart({ userId, profile }: WeightPredict
       console.error('Error loading weight data:', error)
       setLoading(false)
     }
-  }
+  }, [userId, profile])
+  
+  useEffect(() => {
+    loadData()
+  }, [loadData])
   
   if (loading) {
     return (
