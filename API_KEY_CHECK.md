@@ -26,7 +26,7 @@ ANTHROPIC_API_KEY=sk-ant-api03-your_actual_key_here
 
 ✅ **正确：**
 ```env
-ANTHROPIC_API_KEY=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
+ANTHROPIC_API_KEY=sk-ant-api03-...（請從 Anthropic 控制台取得）
 ```
 
 ❌ **错误示例：**

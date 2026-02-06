@@ -38,7 +38,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 
 
 # Claude API
-ANTHROPIC_API_KEY=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
+ANTHROPIC_API_KEY=sk-ant-api03-...（請從 Anthropic 控制台取得）
 ```
 
 ### 如何取得 Supabase 金鑰：
