@@ -254,7 +254,8 @@ export default function OnboardingPage() {
       console.log('Allergies:', allergyList)
 
       // 更新 profile（Supabase 客戶端泛型推斷為 never 時用 any 繞過型別檢查）
-      const { error } = await (supabase as any)
+      const db = supabase as any
+      const { error } = await db
         .from('profiles')
         .update({
           calorie_target: calorieTarget,
