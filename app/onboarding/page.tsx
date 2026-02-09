@@ -253,26 +253,26 @@ export default function OnboardingPage() {
       console.log('Dietary habit:', dietaryHabit)
       console.log('Allergies:', allergyList)
 
-      // 更新 profile（Supabase 客戶端泛型推斷為 never 時用 any 繞過型別檢查）
-      const db = supabase as any
-      const { error } = await db
+      // 更新 profile（Supabase 客戶端泛型推斷為 never，用型別斷言繞過）
+      const payload = {
+        calorie_target: calorieTarget,
+        protein_target: nutrition.protein,
+        carbs_target: nutrition.carbs,
+        fat_target: nutrition.fat,
+        fiber_target: nutrition.fiber,
+        dietary_restrictions: dietaryRestrictions,
+        dietary_habit: dietaryHabit,
+        allergies: allergyList,
+        gender: gender,
+        age: parseInt(age, 10) || null,
+        height: parseFloat(height) || null,
+        weight: parseFloat(weight) || null,
+        activity_level: activityLevel,
+        goal: goal
+      }
+      const { error } = await (supabase as any)
         .from('profiles')
-        .update({
-          calorie_target: calorieTarget,
-          protein_target: nutrition.protein,
-          carbs_target: nutrition.carbs,
-          fat_target: nutrition.fat,
-          fiber_target: nutrition.fiber,
-          dietary_restrictions: dietaryRestrictions,
-          dietary_habit: dietaryHabit,
-          allergies: allergyList,
-          gender: gender,
-          age: parseInt(age, 10) || null,
-          height: parseFloat(height) || null,
-          weight: parseFloat(weight) || null,
-          activity_level: activityLevel,
-          goal: goal
-        })
+        .update(payload)
         .eq('id', user.id)
 
       if (error) throw error
