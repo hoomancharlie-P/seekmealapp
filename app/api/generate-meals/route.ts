@@ -3,11 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 import { extractJsonFromAiResponse } from '@/lib/ai-json'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// 不在模組頂層建立 client，避免 build 時 env 未注入導致 supabaseKey is required
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,9 +35,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 })
     }
 
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !serviceKey) {
+      return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+    }
+    const supabase = createClient(url, serviceKey)
+
     // 使用 v1beta API 中可用的模型（測試確認 gemini-2.0-flash 可用）
     const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
     console.log(`🤖 Using model: ${modelName}`)
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: modelName })
 
     // 計算每餐卡路里分配
