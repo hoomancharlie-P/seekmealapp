@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { MessageParam } from '@anthropic-ai/sdk/resources'
 
 const apiKey = process.env.ANTHROPIC_API_KEY
 
@@ -33,11 +32,8 @@ export async function callClaude(
 ): Promise<string> {
   try {
     const model = options?.model || DEFAULT_MODEL
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: prompt,
-      },
+    const messages = [
+      { role: 'user' as const, content: prompt },
     ]
 
     const response = await anthropic.messages.create({
@@ -45,7 +41,7 @@ export async function callClaude(
       max_tokens: options?.maxTokens || 1024,
       system: options?.system,
       temperature: options?.temperature,
-      messages: messages as any,
+      messages,
     })
 
     // Extract text content from the response
