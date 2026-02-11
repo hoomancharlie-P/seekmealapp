@@ -36,11 +36,17 @@ export async function POST(request: NextRequest) {
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) {
+      const missing = !url
+        ? 'NEXT_PUBLIC_SUPABASE_URL'
+        : 'NEXT_PUBLIC_SUPABASE_ANON_KEY 或 SUPABASE_SERVICE_ROLE_KEY'
+      return NextResponse.json(
+        { error: `Supabase not configured (missing: ${missing}). Set in Vercel → Production → Redeploy.` },
+        { status: 500 }
+      )
     }
-    const supabase = createClient(url, serviceKey)
+    const supabase = createClient(url, key)
 
     // 使用 v1beta API 中可用的模型（測試確認 gemini-2.0-flash 可用）
     const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
