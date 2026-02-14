@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
       days = 3,
       dietaryRestrictions = [],
       dietaryHabit = 'none',
-      allergies = []
+      allergies = [],
+      forceReplace = false
     } = body
 
     console.log('🤖 Generating meals for user (v2 DB-first):', userId)
@@ -427,9 +428,26 @@ JSON 結構：
       console.error('❌ [DB] Fetch existing meals threw:', e?.message ?? e)
       return NextResponse.json({ error: '查詢既有餐單失敗', details: e?.message ?? String(e) }, { status: 500 })
     }
+    const normalizeDate = (d: string) => (d && d.includes('T')) ? d.split('T')[0] : (d || '')
+    const normalizeType = (t: string) => (t || '').toLowerCase()
     const existingSet = new Set(
-      (existingMeals ?? []).map((m) => `${m.date}-${m.type}`)
+      (existingMeals ?? []).map((m) => `${normalizeDate(m.date)}-${normalizeType(m.type)}`)
     )
+    if (forceReplace) {
+      const { data: existingRows } = await supabase
+        .from('meals')
+        .select('id')
+        .eq('user_id', userId)
+        .in('date', datesToCheck)
+      const ids = (existingRows ?? []).map((r: { id: string }) => r.id)
+      if (ids.length > 0) {
+        await supabase.from('foods').delete().in('meal_id', ids)
+        const { error: delErr } = await supabase.from('meals').delete().eq('user_id', userId).in('date', datesToCheck)
+        if (delErr) console.error('❌ [DB] forceReplace delete meals:', delErr)
+        existingSet.clear()
+        console.log('📝 [DB] forceReplace: cleared', ids.length, 'existing meals for date range')
+      }
+    }
     const mealsToInsert: Array<{
       user_id: string
       date: string
@@ -450,12 +468,13 @@ JSON 結構：
       const dayMeals = mealsByDay[dayOffset + 1] ?? []
       for (let i = 0; i < dayMeals.length; i++) {
         const meal: any = dayMeals[i]
-        const key = `${dateStr}-${meal.type}`
+        const typeNorm = normalizeType(meal.type || '')
+        const key = `${dateStr}-${typeNorm}`
         if (existingSet.has(key)) continue
         mealsToInsert.push({
           user_id: userId,
           date: dateStr,
-          type: meal.type,
+          type: typeNorm,
           emoji: meal.emoji ?? '🍽️',
           calories: meal.calories ?? 0,
           protein: meal.protein ?? 0,

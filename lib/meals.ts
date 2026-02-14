@@ -181,7 +181,8 @@ export async function createInitialMeals(
         days: 3,
         dietaryRestrictions: userProfile.dietary_restrictions || [],
         dietaryHabit: userProfile.dietary_habit || 'none',
-        allergies: userProfile.allergies || []
+        allergies: userProfile.allergies || [],
+        forceReplace: true
       }),
     })
 

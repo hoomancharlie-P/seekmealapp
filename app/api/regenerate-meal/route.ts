@@ -19,24 +19,36 @@ export async function POST(request: NextRequest) {
       fiberTarget,
       dietaryRestrictions = [],
       dietaryHabit = 'none',
-      allergies = []
+      allergies = [],
+      returnOnly = false,
+      replaceWithMeal,
+      isReplacementOperation = false
     } = body
+
+    const returnOnlyMode = returnOnly === true
+    const useReplacePayload = replaceWithMeal && typeof replaceWithMeal === 'object' && Array.isArray(replaceWithMeal?.foods) && replaceWithMeal.foods.length > 0
+
+    console.log('🔄 Regenerating meal:', { mealId, mealType, calorieTarget, returnOnly: returnOnlyMode, replaceWithMeal: !!useReplacePayload, isReplacementOperation: !!isReplacementOperation })
     
-    console.log('🔄 Regenerating meal:', { mealId, mealType, calorieTarget })
-    
-    if (!process.env.GEMINI_API_KEY) {
+    // 若為「寫入用戶所選餐單」則不需呼叫 Gemini；否則需要
+    if (!useReplacePayload && !process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 })
+    }
+    if (replaceWithMeal && typeof replaceWithMeal === 'object' && (!Array.isArray(replaceWithMeal?.foods) || replaceWithMeal.foods.length === 0)) {
+      return NextResponse.json({ error: '所選餐單缺少食物列表，請重新揀選', success: false }, { status: 400 })
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!url || !serviceKey) {
-      return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: 'Supabase service role key required for regenerate-meal (RLS). Set SUPABASE_SERVICE_ROLE_KEY in Vercel → Settings → Environment Variables, then Redeploy.',
+        },
+        { status: 500 }
+      )
     }
     const supabase = createClient(url, serviceKey)
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     
     // 餐次名稱
     const mealNames: Record<string, string> = {
@@ -130,32 +142,74 @@ ${mealType === 'snack' ? '小食要低卡健康、易攜帶，例如：水果、
 
 請立即生成（純 JSON）：`
 
-    console.log('📤 Sending to Gemini...')
-    
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-    
-    // 清理回應
-    let cleanText = text.trim()
-    if (cleanText.startsWith('```json')) {
-      cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-    } else if (cleanText.startsWith('```')) {
-      cleanText = cleanText.replace(/```\n?/g, '')
+    let mealData: { calories: number; protein: number; carbs: number; fat: number; fiber: number; foods: any[] }
+
+    if (useReplacePayload) {
+      mealData = {
+        calories: Number(replaceWithMeal.calories) || calorieTarget,
+        protein: Number(replaceWithMeal.protein) || proteinTarget,
+        carbs: Number(replaceWithMeal.carbs) || carbsTarget,
+        fat: Number(replaceWithMeal.fat) || fatTarget,
+        fiber: Number(replaceWithMeal.fiber) ?? 0,
+        foods: (replaceWithMeal.foods || []).map((f: any, i: number) => ({
+          name: typeof f.name === 'string' ? (f.portion ? `${f.name} ${f.portion}`.trim() : f.name) : String(f.name || ''),
+          calories: Number(f.calories) || 0,
+          protein: Number(f.protein) || 0,
+          carbs: Number(f.carbs) || 0,
+          fat: Number(f.fat) || 0,
+          fiber: Number(f.fiber) ?? 0
+        }))
+      }
+      console.log('✅ Using replaceWithMeal with', mealData.foods.length, 'foods')
+    } else {
+      const apiKey = process.env.GEMINI_API_KEY
+      if (!apiKey) {
+        return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 })
+      }
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      console.log('📤 Sending to Gemini...')
+      const result = await model.generateContent(prompt)
+      const text = result.response.text()
+
+      let cleanText = text.trim()
+      if (cleanText.startsWith('```json')) {
+        cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
+      } else if (cleanText.startsWith('```')) {
+        cleanText = cleanText.replace(/```\n?/g, '')
+      }
+      cleanText = cleanText.trim()
+
+      console.log('📥 Response:', cleanText.substring(0, 200))
+
+      const parsed = JSON.parse(cleanText)
+      mealData = {
+        calories: parsed.calories ?? calorieTarget,
+        protein: parsed.protein ?? proteinTarget,
+        carbs: parsed.carbs ?? carbsTarget,
+        fat: parsed.fat ?? fatTarget,
+        fiber: parsed.fiber ?? 0,
+        foods: (parsed.foods || []).map((f: any) => ({
+          name: typeof f.name === 'string' ? (f.portion ? `${f.name} ${f.portion}`.trim() : f.name) : String(f.name || ''),
+          calories: Number(f.calories) || 0,
+          protein: Number(f.protein) || 0,
+          carbs: Number(f.carbs) || 0,
+          fat: Number(f.fat) || 0,
+          fiber: Number(f.fiber) ?? 0
+        }))
+      }
+
+      if (!mealData.foods || mealData.foods.length === 0) {
+        throw new Error('Invalid meal data')
+      }
+      console.log('✅ Generated meal with', mealData.foods.length, 'foods')
     }
-    cleanText = cleanText.trim()
-    
-    console.log('📥 Response:', cleanText.substring(0, 200))
-    
-    // 解析 JSON
-    const mealData = JSON.parse(cleanText)
-    
-    if (!mealData.foods || !Array.isArray(mealData.foods)) {
-      throw new Error('Invalid meal data')
+
+    if (returnOnlyMode) {
+      return NextResponse.json({ success: true, meal: mealData })
     }
-    
-    console.log('✅ Generated meal with', mealData.foods.length, 'foods')
-    
-    // 更新數據庫
+
+    // 更新數據庫（必須用 service role 繞過 foods 的 RLS）
     // 1. 刪除舊的 foods
     const { error: deleteFoodsError } = await supabase
       .from('foods')
@@ -166,7 +220,7 @@ ${mealType === 'snack' ? '小食要低卡健康、易攜帶，例如：水果、
       console.error('Delete foods error:', deleteFoodsError)
       throw deleteFoodsError
     }
-    
+
     // 2. 更新 meal
     const { error: updateMealError } = await supabase
       .from('meals')
@@ -191,8 +245,8 @@ ${mealType === 'snack' ? '小食要低卡健康、易攜帶，例如：水果、
       console.error('Update meal error:', updateMealError)
       throw updateMealError
     }
-    
-    // 3. 插入新的 foods
+
+    // 3. 插入新的 foods（需 service role 繞過 RLS）
     const foodsToInsert = mealData.foods.map((food: any, index: number) => ({
       meal_id: mealId,
       name: food.name,
