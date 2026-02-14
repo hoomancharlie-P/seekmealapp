@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
       dietaryRestrictions = [],
       dietaryHabit = 'none',
       allergies = [],
-      forceReplace = false
+      forceReplace = false,
+      startDate: clientStartDate
     } = body
 
     console.log('🤖 Generating meals for user (v2 DB-first):', userId)
@@ -403,15 +404,31 @@ JSON 結構：
     console.log('📅 Sample meal.day from AI:', sampleDays, '→ normalized to 1-based')
 
     // 先寫入 DB（逾時前完成），再跑驗證與統計
+    // 日期範圍：若前端傳 startDate（用戶當地「今天」），則從該日開始算 days 天，避免時區導致「後天」空白
     console.log('📝 [DB] Starting write step...')
-    const today = new Date()
+    const parseStart = (str: string): Date => {
+      const [y, m, d] = (str || '').split('-').map(Number)
+      if (!y || !m || !d) return new Date()
+      const date = new Date(y, m - 1, d)
+      return isNaN(date.getTime()) ? new Date() : date
+    }
+    const startDay = clientStartDate && /^\d{4}-\d{2}-\d{2}$/.test(String(clientStartDate))
+      ? parseStart(String(clientStartDate))
+      : new Date()
+    startDay.setHours(0, 0, 0, 0)
+    const toDateStr = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
     const datesToCheck: string[] = []
     for (let d = 0; d < days; d++) {
-      const d2 = new Date(today)
-      d2.setDate(d2.getDate() + d)
-      datesToCheck.push(d2.toISOString().split('T')[0])
+      const d2 = new Date(startDay)
+      d2.setDate(startDay.getDate() + d)
+      datesToCheck.push(toDateStr(d2))
     }
-    console.log('📝 [DB] datesToCheck=', datesToCheck)
+    console.log('📝 [DB] datesToCheck=', datesToCheck, clientStartDate ? `(client startDate: ${clientStartDate})` : '(server today)')
     let existingMeals: { date: string; type: string }[] | null = null
     try {
       const res = await supabase

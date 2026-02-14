@@ -230,10 +230,10 @@ ${mealType === 'snack' ? '小食要低卡健康、易攜帶，例如：水果、
         carbs: mealData.carbs,
         fat: mealData.fat,
         fiber: mealData.fiber,
-        // 重置調整狀態
+        updated_at: new Date().toISOString(),
         is_adjusted: false,
         adjusted_from: null,
-        is_special_event: false, // 如果重新生成，取消特殊活動狀態
+        is_special_event: false,
         special_event_type: null,
         special_event_description: null,
         special_event_calories: null,
