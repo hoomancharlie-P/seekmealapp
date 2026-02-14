@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Cat from '@/components/Cat'
@@ -8,6 +8,7 @@ import MealCard from '@/components/MealCard'
 import EditMealModal from '@/components/EditMealModal'
 import SpecialEventModal, { type SpecialEventData } from '@/components/SpecialEventModal'
 import AdjustmentPreviewModal from '@/components/AdjustmentPreviewModal'
+import BottomSheet from '@/components/BottomSheet'
 import { adjustMealPlan, type AdjustMealPlanOutput, type AdjustmentOption } from '@/lib/adjustMealPlan'
 import { fetchMeals, createInitialMeals, updateMealConsumed, updateMeals, updateFoods, type MealWithFoods } from '@/lib/meals'
 import type { CatExpression } from '@/types/cat'
@@ -410,11 +411,11 @@ export default function Home() {
     const foodsToInsert = newMeal.foods.map((food: any, index: number) => ({
       meal_id: oldMeal.id,
       name: food.name ?? '',
-      calories: Number(food.calories) || 0,
-      protein: Number(food.protein) || 0,
-      carbs: Number(food.carbs) || 0,
-      fat: Number(food.fat) || 0,
-      fiber: Number(food.fiber) || 0,
+      calories: toInt(food.calories),
+      protein: toInt(food.protein),
+      carbs: toInt(food.carbs),
+      fat: toInt(food.fat),
+      fiber: toInt(food.fiber),
       order: index
     }))
     const { error: insErr } = await db
@@ -472,11 +473,11 @@ export default function Home() {
     const foodsToInsert = newMeal.foods.map((food: any, index: number) => ({
       meal_id: oldMeal.id,
       name: food.name ?? '',
-      calories: Number(food.calories) || 0,
-      protein: Number(food.protein) || 0,
-      carbs: Number(food.carbs) || 0,
-      fat: Number(food.fat) || 0,
-      fiber: Number(food.fiber) || 0,
+      calories: toInt(food.calories),
+      protein: toInt(food.protein),
+      carbs: toInt(food.carbs),
+      fat: toInt(food.fat),
+      fiber: toInt(food.fiber),
       order: index
     }))
     const { error: insErr } = await db
@@ -683,6 +684,17 @@ export default function Home() {
     })
   }
 
+  // 安全轉為數字（DB 整數欄位不接受 "0.5" 等字串）
+  const toNumber = (value: unknown): number => {
+    if (value === null || value === undefined || value === '') return 0
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value)
+    return isNaN(num) ? 0 : Math.round(num * 10) / 10
+  }
+  const toInt = (value: unknown): number => {
+    const n = toNumber(value)
+    return Math.round(n)
+  }
+
   // 處理拍照
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -717,16 +729,16 @@ export default function Home() {
         
         console.log('✅ AI analysis:', result.data)
         
-        // 添加識別的食物
+        // 添加識別的食物（營養素一律轉數字，避免 DB "0.5" 字串錯誤）
         const newFoods = result.data.foods.map((food: any, index: number) => ({
           id: `photo-${Date.now()}-${index}`,
-          name: food.name + (food.portion ? ` ${food.portion}` : ''),
+          name: String(food.name || '').trim() + (food.portion ? ` ${String(food.portion)}` : ''),
           portion: food.portion,
-          calories: food.calories,
-          protein: food.protein,
-          carbs: food.carbs,
-          fat: food.fat,
-          fiber: food.fiber,
+          calories: toInt(food.calories),
+          protein: toInt(food.protein),
+          carbs: toInt(food.carbs),
+          fat: toInt(food.fat),
+          fiber: toInt(food.fiber),
           confidence: food.confidence,
           notes: food.notes
         }))
@@ -739,16 +751,16 @@ export default function Home() {
             addMethod: null // 轉為列表視圖
           } : null)
         } else if (managingFoods) {
-          // 如果是食物管理模式，直接添加到數據庫
+          // 如果是食物管理模式，直接添加到數據庫（確保為整數）
           try {
              const foodsToInsert = newFoods.map((f: any) => ({
                 meal_id: managingFoods.meal.id,
-                name: f.name + (f.portion ? ` ${f.portion}` : ''),
-                calories: f.calories,
-                protein: f.protein,
-                carbs: f.carbs,
-                fat: f.fat,
-                fiber: f.fiber
+                name: (f.name || '').trim(),
+                calories: toInt(f.calories),
+                protein: toInt(f.protein),
+                carbs: toInt(f.carbs),
+                fat: toInt(f.fat),
+                fiber: toInt(f.fiber)
              }))
              
              const { error } = await db.from('foods').insert(foodsToInsert)
@@ -816,16 +828,16 @@ export default function Home() {
       
       console.log('✅ AI analysis:', result.data)
       
-      // 添加識別的食物
+      // 添加識別的食物（營養素轉數字，與拍照一致）
       const newFoods = result.data.foods.map((food: any, index: number) => ({
         id: `text-${Date.now()}-${index}`,
-        name: food.name + (food.portion ? ` ${food.portion}` : ''),
+        name: String(food.name || '').trim() + (food.portion ? ` ${String(food.portion)}` : ''),
         portion: food.portion,
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat,
-        fiber: food.fiber
+        calories: toInt(food.calories),
+        protein: toInt(food.protein),
+        carbs: toInt(food.carbs),
+        fat: toInt(food.fat),
+        fiber: toInt(food.fiber)
       }))
       
       setManualRecording(prev => prev ? {
@@ -953,15 +965,15 @@ export default function Home() {
       
       console.log('✅ Updated meal')
       
-      // 3. 插入新的 foods
-      const foodsToInsert = foods.map((food, index) => ({
+      // 3. 插入新的 foods（確保數字為整數）
+      const foodsToInsert = foods.map((food: any, index: number) => ({
         meal_id: meal.id,
-        name: food.name,
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat,
-        fiber: food.fiber,
+        name: food.name ?? '',
+        calories: toInt(food.calories),
+        protein: toInt(food.protein),
+        carbs: toInt(food.carbs),
+        fat: toInt(food.fat),
+        fiber: toInt(food.fiber),
         order: index
       }))
       
@@ -3014,103 +3026,72 @@ export default function Home() {
 
       {/* === 智能餐單推薦彈窗 (Task 6.6) === */}
       
-      {/* 選擇模式彈窗 */}
-      {replacingMeal && replacementMode === 'select' && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setReplacingMeal(null)
-              setReplacementMode(null)
-            }
-          }}
-        >
-          <motion.div
-            initial={{ y: 300, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg p-6 pb-8"
+      {/* 選擇模式彈窗 - Bottom Sheet */}
+      <BottomSheet
+        isOpen={!!(replacingMeal && replacementMode === 'select')}
+        onClose={() => {
+          setReplacingMeal(null)
+          setReplacementMode(null)
+        }}
+        title={`🔄 更換${replacingMeal ? (() => {
+          const names: Record<string, string> = {
+            breakfast: '早餐',
+            lunch: '午餐',
+            dinner: '晚餐',
+            snack: '小食'
+          }
+          return names[replacingMeal.type] || '餐次'
+        })() : ''}`}
+      >
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setReplacementMode('quick')}
+            className="w-full flex items-start gap-3 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">
-                🔄 更換{(() => {
-                  const names: Record<string, string> = {
-                    breakfast: '早餐',
-                    lunch: '午餐',
-                    dinner: '晚餐',
-                    snack: '小食'
-                  }
-                  return names[replacingMeal.type] || '餐次'
-                })()}
-              </h3>
-              <button
-                onClick={() => {
-                  setReplacingMeal(null)
-                  setReplacementMode(null)
-                }}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
+            <span className="text-3xl flex-shrink-0">🎲</span>
+            <div className="flex-1 text-left min-w-0">
+              <div className="font-semibold text-gray-900">快速生成</div>
+              <div className="text-sm text-gray-600 mt-1">根據營養目標快速生成</div>
             </div>
-            
-            <div className="space-y-3">
-              {/* 快速生成 */}
-              <button
-                onClick={() => setReplacementMode('quick')}
-                className="w-full flex items-start gap-3 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all"
-              >
-                <span className="text-3xl flex-shrink-0">🎲</span>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="font-semibold text-gray-900">快速生成</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    根據營養目標快速生成
-                  </div>
-                </div>
-                <span className="text-gray-400 text-xl flex-shrink-0">›</span>
-              </button>
-              
-              {/* 智能推薦 */}
-              <button
-                onClick={() => setReplacementMode('smart')}
-                className="w-full flex items-start gap-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl hover:bg-blue-100 active:scale-[0.98] transition-all"
-              >
-                <span className="text-3xl flex-shrink-0">💭</span>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="font-semibold text-gray-900">唔知食咩好</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    告訴我你的想法，AI 推薦
-                  </div>
-                </div>
-                <span className="text-gray-400 text-xl flex-shrink-0">›</span>
-              </button>
+            <span className="text-gray-400 text-xl flex-shrink-0">›</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReplacementMode('smart')}
+            className="w-full flex items-start gap-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl hover:bg-blue-100 active:scale-[0.98] transition-all"
+          >
+            <span className="text-3xl flex-shrink-0">💭</span>
+            <div className="flex-1 text-left min-w-0">
+              <div className="font-semibold text-gray-900">唔知食咩好</div>
+              <div className="text-sm text-gray-600 mt-1">告訴我你的想法，AI 推薦</div>
             </div>
-          </motion.div>
+            <span className="text-gray-400 text-xl flex-shrink-0">›</span>
+          </button>
         </div>
-      )}
+      </BottomSheet>
 
-      {/* 快速生成加載 */}
-      {replacementMode === 'quick' && quickGenerating && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-3xl p-8 max-w-md w-full text-center"
-          >
-            <div className="text-6xl mb-4">🎲</div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              正在根據你的營養目標生成新餐單
-            </h3>
-            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-purple-600 to-blue-600"
-                initial={{ width: '0%' }}
-                animate={{ width: '100%' }}
-                transition={{ duration: 5, ease: 'linear' }}
-              />
-            </div>
-          </motion.div>
+      {/* 快速生成加載 - Bottom Sheet */}
+      <BottomSheet
+        isOpen={replacementMode === 'quick' && quickGenerating}
+        onClose={() => {}}
+        maxHeight="40vh"
+      >
+        <div className="text-center py-4">
+          <div className="text-6xl mb-4">🎲</div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            正在根據你的營養目標生成新餐單
+          </h3>
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-purple-600 to-blue-600"
+              initial={{ width: '0%' }}
+              animate={{ width: '100%' }}
+              transition={{ duration: 5, ease: 'linear' }}
+            />
+          </div>
         </div>
-      )}
+      </BottomSheet>
 
       {/* 智能推薦選擇 */}
       {replacementMode === 'smart' && !smartGenerating && smartOptions.length === 0 && (
@@ -3367,75 +3348,46 @@ export default function Home() {
         </div>
       )}
 
-      {/* 智能推薦加載 */}
-      {smartGenerating && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+      {/* 智能推薦加載 - Bottom Sheet */}
+      <BottomSheet
+        isOpen={!!smartGenerating}
+        onClose={() => {}}
+        maxHeight="40vh"
+      >
+        <div className="text-center py-4 flex flex-col">
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-3xl p-8 max-w-md w-full text-center flex flex-col"
+            className="text-6xl mb-6"
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <motion.div
-              className="text-6xl mb-6"
-              animate={{
-                y: [0, -10, 0],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-            >
-              💭
-            </motion.div>
-            <h3 className="text-xl font-bold text-gray-900 mb-8">
-              {smartRecommendHint || 'AI 正在推薦...'}
-            </h3>
-            <div className="mt-auto">
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-gradient-to-r from-blue-600 to-purple-600"
-                  initial={{ width: '0%' }}
-                  animate={{ width: '100%' }}
-                  transition={{ duration: 10, ease: 'linear' }}
-                />
-              </div>
-            </div>
+            💭
           </motion.div>
-        </div>
-      )}
-
-      {/* 智能推薦結果 */}
-      {smartOptions.length > 0 && !selectedOption && !smartGenerating && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setSmartOptions([])
-              setReplacementMode('select')
-            }
-          }}
-        >
-          <motion.div
-            initial={{ y: 300, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto p-5 pb-6"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold text-gray-900">
-                為你推薦 {smartOptions.length} 個選項
-              </h3>
-              <button
-                onClick={() => {
-                  setSmartOptions([])
-                  setReplacementMode('select')
-                }}
-                className="text-gray-400 hover:text-gray-600 text-xl p-1"
-              >
-                ×
-              </button>
+          <h3 className="text-xl font-bold text-gray-900 mb-8">
+            {smartRecommendHint || 'AI 正在推薦...'}
+          </h3>
+          <div className="mt-auto">
+            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-blue-600 to-purple-600"
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 10, ease: 'linear' }}
+              />
             </div>
-            
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* 智能推薦結果 - Bottom Sheet */}
+      <BottomSheet
+        isOpen={smartOptions.length > 0 && !selectedOption && !smartGenerating}
+        onClose={() => {
+          setSmartOptions([])
+          setReplacementMode('select')
+        }}
+        title={`為你推薦 ${smartOptions.length} 個選項`}
+      >
+        <div className="p-0">
             {showReRecommendBanner && (
               <div className="mb-3 py-2 px-3 bg-primary-50 border border-primary-200 rounded-xl text-sm text-primary-700 font-medium text-center">
                 已為你換上同類型不同菜式
@@ -3606,9 +3558,8 @@ export default function Home() {
                 換一批（同類型不同菜式）
               </button>
             </div>
-          </motion.div>
         </div>
-      )}
+      </BottomSheet>
 
       {/* 選項詳情（已整合到結果頁面，此彈窗不再需要） */}
       {false && selectedOption && !adjustmentChoice && (
@@ -3712,16 +3663,16 @@ export default function Home() {
       )}
 
       {/* 調整選擇彈窗（僅在點擊「選擇這個」後顯示） */}
-      {showAdjustmentChoiceModal && selectedOption && replacingMeal && selectedOption.calories > replacingMeal.calories + 50 && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl w-full max-w-md p-6"
-          >
-            <h3 className="text-lg font-bold text-gray-900 mb-2">
-              💡 這個餐單會超標 {selectedOption.calories - replacingMeal.calories} 卡
-            </h3>
+      <BottomSheet
+        isOpen={!!(showAdjustmentChoiceModal && selectedOption && replacingMeal && selectedOption.calories > replacingMeal.calories + 50)}
+        onClose={() => {
+          setShowAdjustmentChoiceModal(false)
+          setAdjustmentChoice(null)
+          setSelectedOption(null)
+        }}
+        title={`💡 這個餐單會超標 ${selectedOption && replacingMeal ? selectedOption.calories - replacingMeal.calories : 0} 卡`}
+        maxHeight="70vh"
+      >
             <p className="text-sm text-gray-600 mb-6">
               如何處理？
             </p>
@@ -3767,6 +3718,7 @@ export default function Home() {
             </div>
             
             <button
+              type="button"
               onClick={() => {
                 setShowAdjustmentChoiceModal(false)
                 setAdjustmentChoice(null)
@@ -3776,9 +3728,7 @@ export default function Home() {
             >
               返回
             </button>
-          </motion.div>
-        </div>
-      )}
+      </BottomSheet>
 
       <BottomNav />
 
