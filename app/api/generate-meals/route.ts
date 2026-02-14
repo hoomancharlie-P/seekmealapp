@@ -5,6 +5,8 @@ import { extractJsonFromAiResponse } from '@/lib/ai-json'
 
 // 不在模組頂層建立 client，避免 build 時 env 未注入導致 supabaseKey is required
 export const dynamic = 'force-dynamic'
+/** 允許 Gemini 呼叫 + 重試 + DB 寫入有足夠時間完成（避免在「Average errors」後因逾時中斷） */
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest) {
       allergies = []
     } = body
 
-    console.log('🤖 Generating meals for user:', userId)
+    console.log('🤖 Generating meals for user (v2 DB-first):', userId)
     console.log('📊 Targets:', { calorieTarget, proteinTarget, carbsTarget, fatTarget, fiberTarget })
     console.log('🍽️ Dietary preferences:', { dietaryRestrictions, dietaryHabit, allergies })
 
@@ -36,17 +38,14 @@ export async function POST(request: NextRequest) {
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !key) {
-      const missing = !url
-        ? 'NEXT_PUBLIC_SUPABASE_URL'
-        : 'NEXT_PUBLIC_SUPABASE_ANON_KEY 或 SUPABASE_SERVICE_ROLE_KEY'
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !serviceKey) {
       return NextResponse.json(
-        { error: `Supabase not configured (missing: ${missing}). Set in Vercel → Production → Redeploy.` },
+        { error: 'Supabase 需設定 SUPABASE_SERVICE_ROLE_KEY 以寫入餐單與食物。請在 Vercel → Environment Variables 設定後重新部署。' },
         { status: 500 }
       )
     }
-    const supabase = createClient(url, key)
+    const supabase = createClient(url, serviceKey)
 
     // 使用 v1beta API 中可用的模型（測試確認 gemini-2.0-flash 可用）
     const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
@@ -305,49 +304,45 @@ JSON 結構：
 
     console.log('📤 Sending request to Gemini...')
 
-    // 添加重試邏輯處理 429 錯誤
-    const maxRetries = 3
+    // 429 重試：較長退避讓配額有時間恢復（若 Vercel 逾時可調高 Function 的 maxDuration）
+    const maxRetries = 4
+    const rateLimitDelaysMs = [0, 5000, 15000, 30000] // 第 1 次不等，之後 5s / 15s / 30s
     let retryCount = 0
     let result, response, text
-    
+
     while (retryCount < maxRetries) {
       try {
-        // 如果不是第一次嘗試，等待一段時間（指數退避）
         if (retryCount > 0) {
-          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000) // 最多等待10秒
-          console.log(`⏳ Waiting ${delay}ms before retry (attempt ${retryCount + 1}/${maxRetries})...`)
+          const delay = rateLimitDelaysMs[Math.min(retryCount, rateLimitDelaysMs.length - 1)]
+          console.log(`⏳ [429] Waiting ${delay}ms before retry (attempt ${retryCount + 1}/${maxRetries})...`)
           await new Promise(resolve => setTimeout(resolve, delay))
         }
-        
+
         console.log(`📤 Sending request to Gemini... (attempt ${retryCount + 1}/${maxRetries})`)
         result = await model.generateContent(prompt)
         response = result.response
         text = response.text()
-        
+
         console.log('📥 Received response from Gemini')
         console.log('Response length:', text.length)
-        
-        // 成功，跳出重試循環
         break
       } catch (apiError: any) {
-        const isRateLimitError = apiError.message?.includes('429') || 
-                                 apiError.message?.includes('Too Many Requests') ||
-                                 apiError.message?.includes('Resource exhausted')
-        
+        const isRateLimitError =
+          apiError.message?.includes('429') ||
+          apiError.message?.includes('Too Many Requests') ||
+          apiError.message?.includes('Resource exhausted')
+
         console.error(`❌ Error calling Gemini API (attempt ${retryCount + 1}/${maxRetries}):`, {
           message: apiError.message,
           isRateLimitError,
           retryCount
         })
-        
-        // 如果是 429 錯誤且還有重試機會，繼續重試
+
         if (isRateLimitError && retryCount < maxRetries - 1) {
           retryCount++
-          console.log(`🔄 Rate limit error, will retry (${retryCount}/${maxRetries})...`)
-          continue // 繼續重試循環
+          console.log(`🔄 Rate limit (429), will retry after backoff (${retryCount}/${maxRetries})...`)
+          continue
         }
-        
-        // 如果不是 429 錯誤，或者已經重試完畢，拋出錯誤
         throw apiError
       }
     }
@@ -393,14 +388,164 @@ JSON 結構：
 
     console.log('✅ Generated', mealsData.meals.length, 'meals')
 
-    // 按天分組驗證（每天必須精確匹配目標）
+    // 按天分組：AI 可能回傳 day 0/1/2 或 1/2/3，一律正規化為 1-based（1=今天, 2=明天, 3=後天）
     const mealsByDay: { [key: number]: any[] } = {}
     mealsData.meals.forEach((meal: any) => {
-      if (!mealsByDay[meal.day]) {
-        mealsByDay[meal.day] = []
-      }
-      mealsByDay[meal.day].push(meal)
+      const rawDay = meal.day
+      const dayKey = typeof rawDay === 'number' && rawDay >= 1 && rawDay <= days
+        ? rawDay
+        : (typeof rawDay === 'number' ? Math.min(days, Math.max(1, rawDay + 1)) : 1)
+      if (!mealsByDay[dayKey]) mealsByDay[dayKey] = []
+      mealsByDay[dayKey].push(meal)
     })
+    const sampleDays = mealsData.meals.slice(0, 4).map((m: any) => m.day)
+    console.log('📅 Sample meal.day from AI:', sampleDays, '→ normalized to 1-based')
+
+    // 先寫入 DB（逾時前完成），再跑驗證與統計
+    console.log('📝 [DB] Starting write step...')
+    const today = new Date()
+    const datesToCheck: string[] = []
+    for (let d = 0; d < days; d++) {
+      const d2 = new Date(today)
+      d2.setDate(d2.getDate() + d)
+      datesToCheck.push(d2.toISOString().split('T')[0])
+    }
+    console.log('📝 [DB] datesToCheck=', datesToCheck)
+    let existingMeals: { date: string; type: string }[] | null = null
+    try {
+      const res = await supabase
+        .from('meals')
+        .select('date, type')
+        .eq('user_id', userId)
+        .in('date', datesToCheck)
+      existingMeals = res.data ?? null
+      if (res.error) {
+        console.error('❌ [DB] Fetch existing meals error:', res.error)
+        return NextResponse.json({ error: '查詢既有餐單失敗', details: res.error.message }, { status: 500 })
+      }
+    } catch (e: any) {
+      console.error('❌ [DB] Fetch existing meals threw:', e?.message ?? e)
+      return NextResponse.json({ error: '查詢既有餐單失敗', details: e?.message ?? String(e) }, { status: 500 })
+    }
+    const existingSet = new Set(
+      (existingMeals ?? []).map((m) => `${m.date}-${m.type}`)
+    )
+    const mealsToInsert: Array<{
+      user_id: string
+      date: string
+      type: string
+      emoji: string
+      calories: number
+      protein: number
+      carbs: number
+      fat: number
+      fiber: number
+      consumed: boolean
+      is_special_event: boolean
+      is_adjusted: boolean
+    }> = []
+    const foodsByKey: Record<string, Array<{ name: string; calories: number; protein: number; carbs: number; fat: number; fiber?: number; order: number }>> = {}
+    for (let dayOffset = 0; dayOffset < days; dayOffset++) {
+      const dateStr = datesToCheck[dayOffset]
+      const dayMeals = mealsByDay[dayOffset + 1] ?? []
+      for (let i = 0; i < dayMeals.length; i++) {
+        const meal: any = dayMeals[i]
+        const key = `${dateStr}-${meal.type}`
+        if (existingSet.has(key)) continue
+        mealsToInsert.push({
+          user_id: userId,
+          date: dateStr,
+          type: meal.type,
+          emoji: meal.emoji ?? '🍽️',
+          calories: meal.calories ?? 0,
+          protein: meal.protein ?? 0,
+          carbs: meal.carbs ?? 0,
+          fat: meal.fat ?? 0,
+          fiber: meal.fiber ?? 0,
+          consumed: false,
+          is_special_event: false,
+          is_adjusted: false,
+        })
+        if (meal.foods?.length) {
+          foodsByKey[key] = meal.foods.map((f: any, idx: number) => ({
+            name: f.name,
+            calories: f.calories ?? 0,
+            protein: f.protein ?? 0,
+            carbs: f.carbs ?? 0,
+            fat: f.fat ?? 0,
+            fiber: f.fiber ?? 0,
+            order: idx,
+          }))
+        }
+      }
+    }
+    let skipped = false
+    console.log('📝 [DB] userId=', userId, 'existingSet.size=', existingSet.size, 'mealsToInsert.length=', mealsToInsert.length)
+    if (mealsToInsert.length === 0 && mealsData.meals.length > 0) {
+      console.warn('⚠️ No meals to insert despite AI returned', mealsData.meals.length, 'meals. mealsByDay keys:', Object.keys(mealsByDay))
+    }
+    if (mealsToInsert.length > 0) {
+      console.log('📝 [DB] Inserting', mealsToInsert.length, 'meals...')
+      let insertedMeals: { id: string; date: string; type: string }[] | null = null
+      try {
+        const insertRes = await supabase
+          .from('meals')
+          .insert(mealsToInsert)
+          .select('id, date, type')
+        insertedMeals = insertRes.data ?? null
+        if (insertRes.error) {
+          console.error('❌ [DB] Insert meals error:', insertRes.error)
+          return NextResponse.json({ error: '寫入餐單失敗', details: insertRes.error.message }, { status: 500 })
+        }
+      } catch (e: any) {
+        console.error('❌ [DB] Insert meals threw:', e?.message ?? e)
+        return NextResponse.json({ error: '寫入餐單失敗', details: e?.message ?? String(e) }, { status: 500 })
+      }
+      if (insertedMeals?.length) {
+        const foodsToInsert: Array<{
+          meal_id: string
+          name: string
+          calories: number
+          protein: number
+          carbs: number
+          fat: number
+          fiber: number
+          order: number
+        }> = []
+        for (const row of insertedMeals) {
+          const key = `${row.date}-${row.type}`
+          const foods = foodsByKey[key]
+          if (!foods?.length) continue
+          for (const f of foods) {
+            foodsToInsert.push({
+              meal_id: row.id,
+              name: f.name,
+              calories: f.calories,
+              protein: f.protein,
+              carbs: f.carbs,
+              fat: f.fat,
+              fiber: f.fiber ?? 0,
+              order: f.order,
+            })
+          }
+        }
+        if (foodsToInsert.length > 0) {
+          console.log('📝 [DB] Inserting', foodsToInsert.length, 'foods...')
+          const { error: insertFoodsError } = await supabase.from('foods').insert(foodsToInsert)
+          if (insertFoodsError) {
+            console.error('❌ [DB] Insert foods error:', insertFoodsError)
+            return NextResponse.json({ error: '寫入食物失敗', details: insertFoodsError.message }, { status: 500 })
+          }
+          console.log('✅ [DB] Inserted', insertedMeals.length, 'meals and', foodsToInsert.length, 'foods')
+        } else {
+          console.log('✅ [DB] Inserted', insertedMeals.length, 'meals (no foods)')
+        }
+      }
+    } else {
+      skipped = true
+      console.log('⏭️ No new meals to insert (all exist)')
+    }
+    console.log('📝 [DB] Write step done')
 
     // 驗證每天的營養素總和
     const dayStats: Array<{
@@ -482,6 +627,8 @@ JSON 結構：
 
     return NextResponse.json({
       success: true,
+      skipped: !!skipped,
+      insertedMealsCount: mealsToInsert.length,
       meals: mealsData.meals,
       stats: {
         totalMeals: mealsData.meals.length,
