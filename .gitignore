@@ -36,3 +36,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# SeekMealApp (Expo / React Native)
+/SeekMealApp/node_modules/
+/SeekMealApp/.expo/
+/SeekMealApp/dist/
+/SeekMealApp/build/
+/SeekMealApp/*.jks
+/SeekMealApp/*.p8
+/SeekMealApp/.env
+/SeekMealApp/.env.local
+/SeekMealApp/npm-debug.log*
+/SeekMealApp/.npm
+

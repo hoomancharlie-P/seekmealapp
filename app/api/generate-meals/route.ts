@@ -520,12 +520,12 @@ JSON 結構：
         })
         if (meal.foods?.length) {
           foodsByKey[key] = meal.foods.map((f: any, idx: number) => ({
-            name: f.name,
-            calories: f.calories ?? 0,
-            protein: f.protein ?? 0,
-            carbs: f.carbs ?? 0,
-            fat: f.fat ?? 0,
-            fiber: f.fiber ?? 0,
+            name: String(f.name || '').trim() || '未命名',
+            calories: Math.round(Number(f.calories) || 0),
+            protein: Math.round(Number(f.protein) || 0),
+            carbs: Math.round(Number(f.carbs) || 0),
+            fat: Math.round(Number(f.fat) || 0),
+            fiber: Math.round(Number(f.fiber) || 0),
             order: idx,
           }))
         }
@@ -572,11 +572,11 @@ JSON 結構：
             foodsToInsert.push({
               meal_id: row.id,
               name: f.name,
-              calories: f.calories,
-              protein: f.protein,
-              carbs: f.carbs,
-              fat: f.fat,
-              fiber: f.fiber ?? 0,
+              calories: Math.round(Number(f.calories) || 0),
+              protein: Math.round(Number(f.protein) || 0),
+              carbs: Math.round(Number(f.carbs) || 0),
+              fat: Math.round(Number(f.fat) || 0),
+              fiber: Math.round(Number(f.fiber) || 0),
               order: f.order,
             })
           }

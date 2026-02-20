@@ -3,6 +3,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
+/** 請求節流：至少間隔 2 秒再呼叫 Gemini，減輕 429 */
+const REQUEST_DELAY_MS = 2000
+let lastRequestTime = 0
+
 interface Message {
   role: 'user' | 'assistant'
   content: string
@@ -48,6 +52,16 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('✅ API Key exists')
+
+    // 請求節流
+    const now = Date.now()
+    const elapsed = now - lastRequestTime
+    if (elapsed < REQUEST_DELAY_MS && lastRequestTime > 0) {
+      const waitMs = REQUEST_DELAY_MS - elapsed
+      console.log(`⏳ Throttle: waiting ${waitMs}ms`)
+      await new Promise((r) => setTimeout(r, waitMs))
+    }
+    lastRequestTime = Date.now()
     
     // Build system instruction (system prompt)
     const systemInstruction = `你係一個專業但親切嘅 AI 飲食教練，名叫「食喵教練」。
