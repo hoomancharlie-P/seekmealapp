@@ -33,6 +33,15 @@ interface UserData {
   }
 }
 
+/** Profile 查詢結果（coach 用） */
+interface CoachProfileRow {
+  calorie_target: number
+  protein_target: number
+  carbs_target: number
+  fat_target: number
+  fiber_target: number
+}
+
 export default function CoachPage() {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
@@ -70,11 +79,12 @@ export default function CoachPage() {
         const m = String(today.getMonth() + 1).padStart(2, '0')
         const d = String(today.getDate()).padStart(2, '0')
         const todayStr = `${y}-${m}-${d}`
-        const { data: profile } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('calorie_target, protein_target, carbs_target, fat_target, fiber_target')
           .eq('id', user.id)
           .single()
+        const profile = profileData as CoachProfileRow | null
         const meals = await fetchMeals(user.id, todayStr, todayStr)
         if (cancelled) return
         const consumed = meals.filter((m: any) => m.consumed)
