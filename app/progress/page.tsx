@@ -46,16 +46,32 @@ export default function ProgressPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => startOfDay(new Date()))
   const [meals, setMeals] = useState<any[]>([])
   const [loadingMeals, setLoadingMeals] = useState(true)
+  const [historyViewMode, setHistoryViewMode] = useState<'date' | 'list'>('date')
+  const [last30DaysSummary, setLast30DaysSummary] = useState<Array<{
+    date: string
+    dateDisplay: string
+    calories: number
+    protein: number
+    caloriePct: number
+    proteinPct: number
+    isToday: boolean
+  }>>([])
+  const [loading30Days, setLoading30Days] = useState(false)
   
   // 體重記錄相關狀態
   const [showWeightModal, setShowWeightModal] = useState(false)
   const [weightInput, setWeightInput] = useState('')
   const [weightDate, setWeightDate] = useState(new Date().toISOString().split('T')[0])
   const [savingWeight, setSavingWeight] = useState(false)
+  // 體重摘要（當前、目標、本週變化）
+  const [weightSummary, setWeightSummary] = useState<{
+    current: number | null
+    target: number | null
+    weekAgo: number | null
+  }>({ current: null, target: null, weekAgo: null })
   
-  const { currentStreak: streak, loading: streakLoading } = useStreak(
-    user?.id,
-    profile?.calorie_target ?? 2000
+  const { currentStreak: streak, longestStreak, loading: streakLoading } = useStreak(
+    user?.id
   )
   
   const selectedDateOnly = useMemo(() => startOfDay(selectedDate), [selectedDate])
@@ -67,7 +83,101 @@ export default function ProgressPage() {
   useEffect(() => {
     loadData()
   }, [])
-  
+
+  // 載入體重摘要（當前、目標、一週前）
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    const run = async () => {
+      try {
+        const todayStr = toLocalDateStr(new Date())
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        const weekAgoStr = toLocalDateStr(weekAgo)
+        const { data: logs, error } = await db
+          .from('weight_logs')
+          .select('date, weight')
+          .eq('user_id', user.id)
+          .lte('date', todayStr)
+          .order('date', { ascending: false })
+          .limit(31)
+        if (cancelled || error) return
+        const list = (logs ?? []) as { date: string; weight: number }[]
+        const current = list.length > 0 ? Number(list[0].weight) : null
+        const weekAgoLog = list.find((l) => l.date <= weekAgoStr)
+        const weekAgoWeight = weekAgoLog ? Number(weekAgoLog.weight) : null
+        let target: number | null = profile?.target_weight ?? null
+        if (!target && profile?.goal && profile?.weight) {
+          const w = Number(profile.weight)
+          if (profile.goal === 'lose') target = w * 0.9
+          else if (profile.goal === 'gain') target = w * 1.1
+          else target = w
+        }
+        if (!target && current != null) target = current
+        if (!cancelled) setWeightSummary({ current, target, weekAgo: weekAgoWeight })
+      } catch (e) {
+        if (!cancelled) setWeightSummary({ current: null, target: null, weekAgo: null })
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [user?.id, profile?.target_weight, profile?.goal, profile?.weight])
+
+  // 載入最近 30 天每日摘要（歷史列表用）
+  useEffect(() => {
+    if (!user?.id || !profile) return
+    let cancelled = false
+    setLoading30Days(true)
+    const run = async () => {
+      try {
+        const today = new Date()
+        const from = new Date(today)
+        from.setDate(from.getDate() - 30)
+        const fromStr = toLocalDateStr(from)
+        const todayStr = toLocalDateStr(today)
+        const { data: rows, error } = await db
+          .from('meals')
+          .select('date, calories, protein, consumed')
+          .eq('user_id', user.id)
+          .gte('date', fromStr)
+          .lte('date', todayStr)
+        if (cancelled || error) return
+        const byDate: Record<string, { calories: number; protein: number }> = {}
+        ;(rows ?? []).forEach((r: { date: string; calories: number; protein: number; consumed: boolean }) => {
+          if (!r.consumed) return
+          if (!byDate[r.date]) byDate[r.date] = { calories: 0, protein: 0 }
+          byDate[r.date].calories += r.calories ?? 0
+          byDate[r.date].protein += r.protein ?? 0
+        })
+        const targetCal = profile.calorie_target || 2000
+        const targetPro = profile.protein_target || 0
+        const summary: typeof last30DaysSummary = []
+        for (let d = new Date(today); summary.length < 30; d.setDate(d.getDate() - 1)) {
+          const dateStr = toLocalDateStr(d)
+          const tot = byDate[dateStr] ?? { calories: 0, protein: 0 }
+          const caloriePct = targetCal > 0 ? Math.round((tot.calories / targetCal) * 100) : 0
+          const proteinPct = targetPro > 0 ? Math.round((tot.protein / targetPro) * 100) : 0
+          summary.push({
+            date: dateStr,
+            dateDisplay: d.toLocaleDateString('zh-HK', { month: 'short', day: 'numeric', weekday: 'short' }),
+            calories: tot.calories,
+            protein: tot.protein,
+            caloriePct,
+            proteinPct,
+            isToday: dateStr === todayStr,
+          })
+        }
+        if (!cancelled) setLast30DaysSummary(summary)
+      } catch (e) {
+        if (!cancelled) setLast30DaysSummary([])
+      } finally {
+        if (!cancelled) setLoading30Days(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [user?.id, profile?.calorie_target, profile?.protein_target])
+
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -233,23 +343,32 @@ export default function ProgressPage() {
       <div className="min-h-screen bg-gray-50 pb-24">
         <div className="max-w-4xl mx-auto p-6">
           {/* Header - 左：標題；右：🔥 連續X天（僅 streak >= 1 顯示） */}
-          <div className="mb-6 flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                📊 進度追蹤
-              </h1>
-              <p className="text-gray-600">
-                查看你的體重變化和歷史記錄
-              </p>
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">📊 進度追蹤</h1>
+            <p className="text-gray-600 text-sm">查看你的體重變化和歷史記錄</p>
+          </div>
+
+          {/* 1. Streak 計數器 */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-baseline gap-2">
+                {streakLoading ? (
+                  <span className="text-gray-400">載入中...</span>
+                ) : (
+                  <>
+                    <span className="text-4xl font-bold text-gray-900">{streak}</span>
+                    <span className="text-xl text-gray-600">天</span>
+                  </>
+                )}
+                <span className="text-lg text-gray-500 ml-2">連續記錄</span>
+              </div>
+              {!streakLoading && longestStreak > 0 && (
+                <div className="text-sm text-gray-500">
+                  最長記錄 <span className="font-semibold text-gray-700">{longestStreak}</span> 天
+                </div>
+              )}
             </div>
-            {!streakLoading && streak >= 1 && (
-              <button
-                type="button"
-                className="shrink-0 px-3 py-1.5 text-sm font-semibold text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                🔥 連續{streak}天
-              </button>
-            )}
+            <p className="text-xs text-gray-400 mt-2">當天有記錄任何一餐即算一天</p>
           </div>
           
           {/* Tab 切換 */}
@@ -283,17 +402,15 @@ export default function ProgressPage() {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-4"
             >
-              {/* 本週卡路里進度 */}
+              {/* 2. 本週進度圖表 */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <WeeklyProgressChart userId={user.id} profile={profile} />
               </div>
-              {/* 體重記錄卡片 - 與下方卡片對齊 */}
+
+              {/* 3. 體重追蹤：當前/目標/差值/本週變化 + 記錄 + 圖表 */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">⚖️ 體重記錄</h3>
-                    <p className="text-sm text-gray-600 mt-1">記錄體重以追蹤進度</p>
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">⚖️ 體重追蹤</h3>
                   <button
                     onClick={() => setShowWeightModal(true)}
                     className="px-4 py-2 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 text-sm"
@@ -301,12 +418,47 @@ export default function ProgressPage() {
                     📝 記錄
                   </button>
                 </div>
+                {(weightSummary.current != null || weightSummary.target != null) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                      <div className="text-xs text-gray-500">當前體重</div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {weightSummary.current != null ? `${weightSummary.current} kg` : '--'}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                      <div className="text-xs text-gray-500">目標體重</div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {weightSummary.target != null ? `${weightSummary.target} kg` : '--'}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                      <div className="text-xs text-gray-500">差值</div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {weightSummary.current != null && weightSummary.target != null
+                          ? `${(weightSummary.current - weightSummary.target) >= 0 ? '+' : ''}${(weightSummary.current - weightSummary.target).toFixed(1)} kg`
+                          : '--'}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                      <div className="text-xs text-gray-500">本週變化</div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {weightSummary.current != null && weightSummary.weekAgo != null
+                          ? `${(weightSummary.current - weightSummary.weekAgo) >= 0 ? '+' : ''}${(weightSummary.current - weightSummary.weekAgo).toFixed(1)} kg`
+                          : '--'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {weightSummary.current == null && weightSummary.target == null && (
+                  <p className="text-sm text-gray-500 mb-4">記錄體重後可查看當前與目標、本週變化</p>
+                )}
               </div>
               
-              {/* 體重預測圖表 */}
+              {/* 體重 30 天趨勢與預測 */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <WeightPredictionChart 
-                  userId={user.id} 
+                <WeightPredictionChart
+                  userId={user.id}
                   profile={profile}
                 />
               </div>
@@ -317,6 +469,61 @@ export default function ProgressPage() {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-4"
             >
+              {/* 4. 歷史記錄：過去約 30 天，可切換日曆/列表 */}
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-bold text-gray-900">📅 歷史記錄</h3>
+                  <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryViewMode('date')}
+                      className={`px-3 py-2 text-sm font-medium ${historyViewMode === 'date' ? 'bg-primary-500 text-white' : 'bg-gray-50 text-gray-600'}`}
+                    >
+                      日曆
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryViewMode('list')}
+                      className={`px-3 py-2 text-sm font-medium ${historyViewMode === 'list' ? 'bg-primary-500 text-white' : 'bg-gray-50 text-gray-600'}`}
+                    >
+                      列表
+                    </button>
+                  </div>
+                </div>
+                {historyViewMode === 'list' ? (
+                  <div className="max-h-80 overflow-y-auto space-y-2">
+                    {loading30Days ? (
+                      <div className="py-6 text-center text-gray-500 text-sm">載入中...</div>
+                    ) : (
+                      last30DaysSummary.map((day) => (
+                        <button
+                          key={day.date}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(startOfDay(parseLocalDateStr(day.date)))
+                            setHistoryViewMode('date')
+                          }}
+                          className={`w-full flex items-center justify-between rounded-xl p-3 border text-left transition-colors ${
+                            day.date === selectedDateStr
+                              ? 'border-primary-300 bg-primary-50'
+                              : 'border-gray-100 bg-gray-50 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span className="text-sm font-medium text-gray-900">
+                            {day.dateDisplay}
+                            {day.isToday && <span className="ml-1 text-primary-600 text-xs">今天</span>}
+                          </span>
+                          <span className="text-xs text-gray-600">
+                            卡 {day.caloriePct}% · 蛋白 {day.proteinPct}%
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              {historyViewMode === 'date' && (
+              <>
               {/* 日期選擇 */}
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between">
@@ -504,6 +711,8 @@ export default function ProgressPage() {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </motion.div>
           )}
         </div>

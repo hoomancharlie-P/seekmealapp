@@ -11,16 +11,18 @@ function toLocalDateStr(d: Date): string {
 }
 
 /**
- * 回傳當前連續達標天數（95–105% 目標卡路里）。
- * 第一天記錄或 0 天時不顯示，由呼叫方判斷。
+ * Phase 7 寬鬆 Streak：只要當天有「任何一餐」已記錄（consumed），即算延續 streak。
+ * 回傳 currentStreak（當前連續天數）、longestStreak（歷史最長連續天數）。
  */
-export function useStreak(userId: string | undefined, targetCalories: number) {
+export function useStreak(userId: string | undefined, _targetCalories?: number) {
   const [currentStreak, setCurrentStreak] = useState(0)
+  const [longestStreak, setLongestStreak] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!userId || !targetCalories) {
+    if (!userId) {
       setCurrentStreak(0)
+      setLongestStreak(0)
       setLoading(false)
       return
     }
@@ -33,7 +35,7 @@ export function useStreak(userId: string | undefined, targetCalories: number) {
 
         const { data: meals, error } = await supabase
           .from('meals')
-          .select('date, calories, consumed')
+          .select('date, consumed')
           .eq('user_id', userId)
           .eq('consumed', true)
           .gte('date', startStr)
@@ -42,31 +44,17 @@ export function useStreak(userId: string | undefined, targetCalories: number) {
         if (cancelled) return
         if (error) throw error
 
-        if (!meals || meals.length === 0) {
-          setCurrentStreak(0)
-          setLoading(false)
-          return
-        }
+        // 寬鬆：有記錄的日期集合（當天至少一餐 consumed）
+        const daysWithRecord = new Set<string>()
+        ;(meals || []).forEach((m: { date: string }) => daysWithRecord.add(m.date))
 
-        const dailyTotals: Record<string, number> = {}
-        meals.forEach((meal: { date: string; calories: number }) => {
-          if (!dailyTotals[meal.date]) dailyTotals[meal.date] = 0
-          dailyTotals[meal.date] += meal.calories || 0
-        })
-
-        const lowerBound = targetCalories * 0.95
-        const upperBound = targetCalories * 1.05
-        const dailyStatus: Record<string, boolean> = {}
-        Object.entries(dailyTotals).forEach(([date, total]) => {
-          dailyStatus[date] = total >= lowerBound && total <= upperBound
-        })
-
+        // 當前連續天數（從今天往前數）
         let current = 0
         const checkDate = new Date()
         checkDate.setHours(0, 0, 0, 0)
         while (true) {
           const dateStr = toLocalDateStr(checkDate)
-          if (dailyStatus[dateStr] === true) {
+          if (daysWithRecord.has(dateStr)) {
             current++
             checkDate.setDate(checkDate.getDate() - 1)
           } else {
@@ -74,9 +62,32 @@ export function useStreak(userId: string | undefined, targetCalories: number) {
           }
         }
 
-        setCurrentStreak(current)
+        // 歷史最長連續天數：遍歷所有有記錄的日期，找最長連續區間
+        const sortedDates = Array.from(daysWithRecord).sort()
+        let longest = 0
+        let runLength = 1
+        for (let i = 1; i < sortedDates.length; i++) {
+          const prev = new Date(sortedDates[i - 1])
+          const curr = new Date(sortedDates[i])
+          const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24)
+          if (diffDays === 1) {
+            runLength++
+          } else {
+            longest = Math.max(longest, runLength)
+            runLength = 1
+          }
+        }
+        longest = Math.max(longest, runLength, current)
+
+        if (!cancelled) {
+          setCurrentStreak(current)
+          setLongestStreak(longest)
+        }
       } catch (e) {
-        if (!cancelled) setCurrentStreak(0)
+        if (!cancelled) {
+          setCurrentStreak(0)
+          setLongestStreak(0)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -85,7 +96,7 @@ export function useStreak(userId: string | undefined, targetCalories: number) {
     return () => {
       cancelled = true
     }
-  }, [userId, targetCalories])
+  }, [userId])
 
-  return { currentStreak, loading }
+  return { currentStreak, longestStreak, loading }
 }

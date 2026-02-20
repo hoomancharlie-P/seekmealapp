@@ -93,11 +93,51 @@ Base URL 使用環境變量 **EXPO_PUBLIC_API_URL**（例如 `https://your-app.v
 | DELETE | `/api/travel-mode` | 結束旅遊模式 |
 | POST | `/api/travel-mode/generate-day` | 單日旅遊餐單生成 |
 | POST | `/api/coach/chat` | AI 教練對話 |
-| POST | `/api/analyze-food-text` | 文字分析食物 |
-| POST | `/api/analyze-food-image` | 圖片分析食物 |
-| POST | `/api/smart-meal-recommendation` | 智能餐單推薦 |
+| POST | `/api/analyze-food-text` | 文字分析食物（記錄實際 － 文字描述） |
+| POST | `/api/analyze-food-image` | 圖片分析食物（記錄實際 － 拍照／上傳照片） |
+| POST | `/api/smart-meal-recommendation` | 智能餐單推薦（生成新一餐） |
+| POST | `/api/meals/[mealId]/log-actual` | 記錄實際：寫入該餐實際卡路里／營養或食物列表，並標記已食用 |
+| PUT | `/api/meals/[mealId]/foods` | 修改單項食物：以新列表替換該餐所有食物，後端重算總營養 |
 
-實作時請對照 **seekmeal-app/app/api/** 下各 `route.ts` 的請求體與回應格式。
+實作時請對照 **seekmeal-app/app/api/** 下各 `route.ts` 的請求體與回應格式。  
+**JSON Request/Response 詳見**：`docs/API_SPEC.md`。
+
+### 4.1 記錄實際流程（主頁 － 三種方式）
+
+主頁「呢一餐」→「記錄實際」後，有三種輸入方式：
+
+| 方式 | 說明 | 使用 API |
+|------|------|----------|
+| **直接輸入** | 使用者手動輸入食物名稱、卡路里、P/C/F/纖維 | 直接呼叫 **POST /api/meals/[mealId]/log-actual**（body：`calories` 或 `foods`） |
+| **文字描述** | 使用者輸入一句描述（如「半碗白飯、一碟菜心」） | 先 **POST /api/analyze-food-text** 取得 `foods`，顯示確認後再 **POST /api/meals/[mealId]/log-actual**（body：`foods`） |
+| **拍照／上傳照片** | 使用者選圖或拍照，AI 識別食物與營養 | 先 **POST /api/analyze-food-image**（body：`image` base64 + `mimeType`）取得 `foods`，顯示確認後再 **POST /api/meals/[mealId]/log-actual**（body：`foods`） |
+
+App 端：`lib/meals.ts` 提供 `analyzeFoodText(text)`、`analyzeFoodImage(imageBase64, mimeType)`、`logMealActual(mealId, payload)`。寫入 DB 時，營養欄位（calories, protein, carbs, fat, fiber）須為**整數**（前端/後端需 toInt 或 Math.round，避免 DB 型別錯誤）。
+
+### 4.2 已做優化與 API/函數需求（文件補遺）
+
+以下為目前已實作的優化與約定，文件中未盡之處一併補齊，供維護與擴充時對照。
+
+- **智能餐單推薦（smart-meal-recommendation）**
+  - 偏好從 **body.preferences** 讀取（與頂層 location/cuisine 等合併）；支援 `location`、`cuisine`、`mood`、`mainType`、`customInput`。
+  - 接受 **1 個選項**：若 AI 只回 1 個選項，後端會自動生成第二個「豐富版」選項（卡路里 × secondOptionCalorieMultiplier）。
+  - **validateAndCorrectMeal**：以 foods 為準自動校正總營養素，營養素/卡路里小誤差不再拋錯；驗證放寬（僅對「無食物」或明顯不符」報錯）。
+
+- **生成餐單（generate-meals）**
+  - **forceReplace**：可傳 `true`，先刪除日期範圍內既有餐單再寫入，避免「已有餐單」導致不寫入。
+  - **startDate**：可傳客戶端「今天」的 YYYY-MM-DD，用於計算日期範圍，避免時區導致「後天」空白。
+
+- **單餐重新生成（regenerate-meal）**
+  - 替換餐單時會更新該餐的 **updated_at**，前端可用於顯示「已更新」或排序。
+
+- **營養欄位與 DB**
+  - 所有寫入 **foods** 或餐單營養的欄位（calories, protein, carbs, fat, fiber）須為**整數**。前端在照片分析、文字分析、手動輸入、修改食物等流程中，組 payload 前應做 **toInt()**／**Math.round()**，避免 DB 錯誤（如 `invalid input syntax for type integer: "0.5"`）。
+
+- **主頁選單與 UI**
+  - 主頁所有選單已改為 **BottomSheet**（從底部滑出）：呢一餐、記錄實際、修改單項食物、特殊活動、生成新一餐、選擇餐單（MealOptionsModal）。載入中「生成餐單」仍使用全螢幕 Modal。
+
+- **記錄實際**
+  - 三種方式（直接輸入、文字描述、拍照／上傳照片）中，**文字描述**與**拍照**皆透過 AI（analyze-food-text / analyze-food-image）取得 `foods`，使用者確認後再呼叫 log-actual；直接輸入則由使用者填寫後直接送 log-actual。
 
 ---
 
@@ -214,25 +254,38 @@ App 內透過 `process.env.EXPO_PUBLIC_*` 讀取。
 
 請依下列順序實作，完成一 Phase 再進行下一 Phase。
 
-1. **Phase 1：專案與環境**
+**當前進度**（依 `docs/WHAT_TO_RECORD.md` 與主頁完成狀態）：
+- **Phase 1–5：已完成**（專案與環境、共用程式碼、導航與 Auth、主頁骨架、主頁互動）。
+- **Phase 6–9：待實作**（設定頁、進度頁、其餘功能、測試與收尾）。
+
+---
+
+### 已完成（Phase 1–5）
+
+1. **Phase 1：專案與環境** ✅
    - 確認本專案為 Expo（或 React Native CLI）專案；已安裝上述依賴。
    - 建立 `.env` 與 `lib/supabase.ts`（使用 `EXPO_PUBLIC_*`），並可成功連線 Supabase（例如登入測試）。
 
-2. **Phase 2：共用程式碼**
+2. **Phase 2：共用程式碼** ✅
    - 複製並改寫 `lib/meals.ts`、`lib/adjustMealPlan.ts`、`lib/ai-json.ts`、`lib/cat/*`；複製 `types/*`；改寫 `hooks/useAuth.ts`、`hooks/useStreak.ts`。
    - 確保所有 `fetch` 使用 `EXPO_PUBLIC_API_URL`，所有 Supabase 使用 App 的 `lib/supabase.ts`。
 
-3. **Phase 3：導航與 Auth**
+3. **Phase 3：導航與 Auth** ✅
    - 實作導航結構：未登入 → AuthScreen（或 OnboardingScreen）；已登入 → Bottom Tabs（主頁、進度、AI 教練、設定）。
    - 實作 AuthScreen（登入/註冊）、AuthGuard 邏輯（依 useAuth 決定顯示哪一層）。
 
-4. **Phase 4：主頁骨架**
+4. **Phase 4：主頁骨架** ✅
    - 主頁：三個日期（今日/明/後天）的餐單列表、Cat、進度環。
    - 讀取餐單（fetchMeals 或 GET /api/meals）、顯示 MealCard 列表；接「生成餐單」API（POST /api/generate-meals），並在成功後刷新列表。
 
-5. **Phase 5：主頁互動**
-   - MealCard：記錄已食、更換單餐、特殊活動彈窗、手動記錄、智能推薦彈窗；邏輯與 Web 一致，UI 改為 RN 元件與 Modal。
+5. **Phase 5：主頁互動** ✅
+   - MealCard：記錄已食、更換單餐、特殊活動、手動記錄（記錄實際）、智能推薦（生成新一餐）；邏輯與 Web 一致。
+   - 主頁所有選單已改為 **BottomSheet**（從底部滑出）：呢一餐、記錄實際、修改單項食物、特殊活動、生成新一餐、選擇餐單（MealOptionsModal）。
    - 載入狀態（Skeleton）、錯誤與成功 Toast。
+
+---
+
+### 待實作（Phase 6–9）
 
 6. **Phase 6：設定頁**
    - 個人資料、營養目標、飲食偏好與過敏的讀寫（Supabase profiles）。
@@ -275,6 +328,8 @@ App 內透過 `process.env.EXPO_PUBLIC_*` 讀取。
 - **載入狀態**：按鈕 loading、列表 Skeleton，與 Web 體驗對齊。
 - **參考來源**：實作時請直接對照 **seekmeal-app** 對應檔案（路徑見本文件），以保持邏輯與行為一致。
 - 若本專案內有 `NATIVE_APP_MIGRATION_PLAN.md` 或 `AGENT_INSTRUCTIONS_OUTLINE.md`，可一併 @ 引用以補充脈絡。
+- 記錄與文件維護可參考 **`docs/WHAT_TO_RECORD.md`**（API 規格、資料模型、狀態流程、詞彙表、測試清單等補充項目）。
+- **繼續發展 Mobile App 時**，請一併對照 **`docs/MOBILE_APP_CHECKLIST.md`**：專案與 App 目錄、環境與 Auth、主頁 state、Phase 6–9 實作對照、易漏項目（型別對齊、圖片上傳、錯誤約定等）。
 
 ---
 

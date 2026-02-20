@@ -37,6 +37,7 @@ export default function OnboardingPage() {
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([])
   const [dietaryHabit, setDietaryHabit] = useState<'none' | 'vegetarian' | 'low_carb' | 'keto'>('none')
   const [allergies, setAllergies] = useState<string>('')
+  const [customRestrictionInput, setCustomRestrictionInput] = useState('')
 
   // 不吃的食物選項
   const restrictionOptions = [
@@ -253,7 +254,7 @@ export default function OnboardingPage() {
       console.log('Dietary habit:', dietaryHabit)
       console.log('Allergies:', allergyList)
 
-      // 更新 profile（Supabase 客戶端泛型推斷為 never，用型別斷言繞過）
+      // 更新 profile（含 onboarding_completed 避免重啟後又要重新輸入）
       const payload = {
         calorie_target: calorieTarget,
         protein_target: nutrition.protein,
@@ -268,7 +269,9 @@ export default function OnboardingPage() {
         height: parseFloat(height) || null,
         weight: parseFloat(weight) || null,
         activity_level: activityLevel,
-        goal: goal
+        goal: goal,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
       }
       const { error } = await (supabase as any)
         .from('profiles')
@@ -277,7 +280,7 @@ export default function OnboardingPage() {
 
       if (error) throw error
 
-      console.log('✅ Profile saved with preferences')
+      console.log('✅ Profile saved with preferences (onboarding_completed: true)')
 
       // 跳轉到主頁
       router.push('/')
@@ -720,7 +723,7 @@ export default function OnboardingPage() {
                 {/* 不吃的食物 */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-3">
-                    不吃的食物（可多選）
+                    有什麼不吃的嗎？（可多選）
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     {restrictionOptions.map(option => (
@@ -750,6 +753,57 @@ export default function OnboardingPage() {
                         </span>
                       </button>
                     ))}
+                  </div>
+                  {/* 其他不吃的食物（選填） */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <p className="text-sm font-medium text-gray-700 mb-2">其他不吃的食物（選填）</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customRestrictionInput}
+                        onChange={(e) => setCustomRestrictionInput(e.target.value)}
+                        placeholder="例如：羊肉、內臟"
+                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const raw = customRestrictionInput.trim()
+                          if (!raw) return
+                          const value = raw.toLowerCase()
+                          if (!dietaryRestrictions.includes(value)) {
+                            setDietaryRestrictions([...dietaryRestrictions, value])
+                          }
+                          setCustomRestrictionInput('')
+                        }}
+                        disabled={!customRestrictionInput.trim()}
+                        className="px-5 py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        添加
+                      </button>
+                    </div>
+                    {/* 已添加的自訂限制（非預設選項的 dietary_restrictions） */}
+                    {dietaryRestrictions.filter(r => !restrictionOptions.some(o => o.value === r)).length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {dietaryRestrictions
+                          .filter(r => !restrictionOptions.some(o => o.value === r))
+                          .map((item) => (
+                            <span
+                              key={item}
+                              className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-full py-1.5 px-3 text-sm font-medium"
+                            >
+                              {item}
+                              <button
+                                type="button"
+                                onClick={() => setDietaryRestrictions(dietaryRestrictions.filter(x => x !== item))}
+                                className="text-blue-600 hover:text-blue-800 font-bold leading-none"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                      </div>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     💡 選擇後，餐單會避免使用這些食材
@@ -818,9 +872,8 @@ export default function OnboardingPage() {
                     </div>
                     {dietaryRestrictions.length > 0 && (
                       <div className="text-sm text-blue-800">
-                        ❌ 不吃：{restrictionOptions
-                          .filter(o => dietaryRestrictions.includes(o.value))
-                          .map(o => o.label)
+                        ❌ 不吃：{dietaryRestrictions
+                          .map(r => restrictionOptions.find(o => o.value === r)?.label ?? r)
                           .join('、')}
                       </div>
                     )}

@@ -18,6 +18,8 @@ export interface Profile {
   weight: number | null
   activity_level: 'sedentary' | 'light' | 'moderate' | 'active'
   goal: 'lose' | 'maintain' | 'gain'
+  target_weight?: number | null
+  onboarding_completed?: boolean | null
 }
 
 export interface Meal {

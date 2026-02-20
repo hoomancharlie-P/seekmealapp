@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import AuthGuard from '@/components/AuthGuard'
 import BottomNav from '@/components/BottomNav'
+import { supabase } from '@/lib/supabase'
+import { fetchMeals } from '@/lib/meals'
 
 interface Message {
   id: string
@@ -42,62 +44,119 @@ export default function CoachPage() {
   // Gemini API 免费 tier 限制：每分钟 5 次请求（每 12 秒一次）
   const MIN_REQUEST_INTERVAL = 13000 // 13 秒（比 12 秒稍长，留出安全余量）
   
-  // 從 localStorage 獲取用戶數據
-  const [userData, setUserData] = useState<UserData>({
-    currentCalories: 750,
-    targetCalories: 1200,
-    remainingCalories: 450,
-    currentNutrition: {
-      protein: 45,
-      carbs: 90,
-      fat: 30,
-      fiber: 15
-    },
-    targetNutrition: {
-      protein: 60,
-      carbs: 150,
-      fat: 40,
-      fiber: 28
-    }
-  })
-  
-  // 從 localStorage 讀取用戶數據
+  const defaultUserData: UserData = {
+    currentCalories: 0,
+    targetCalories: 2000,
+    remainingCalories: 2000,
+    currentNutrition: { protein: 0, carbs: 0, fat: 0, fiber: 0 },
+    targetNutrition: { protein: 150, carbs: 200, fat: 65, fiber: 25 },
+  }
+  const [userData, setUserData] = useState<UserData>(defaultUserData)
+  const [userDataReady, setUserDataReady] = useState(false)
+
+  // 從 Supabase 載入 profile + 當日 meals，計算 userData
   useEffect(() => {
-    const stored = localStorage.getItem('userData')
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user || cancelled) {
+          setUserData(defaultUserData)
+          setUserDataReady(true)
+          return
+        }
+        const today = new Date()
+        const y = today.getFullYear()
+        const m = String(today.getMonth() + 1).padStart(2, '0')
+        const d = String(today.getDate()).padStart(2, '0')
+        const todayStr = `${y}-${m}-${d}`
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('calorie_target, protein_target, carbs_target, fat_target, fiber_target')
+          .eq('id', user.id)
+          .single()
+        const meals = await fetchMeals(user.id, todayStr, todayStr)
+        if (cancelled) return
+        const consumed = meals.filter((m: any) => m.consumed)
+        const currentCalories = consumed.reduce((sum: number, m: any) => sum + (m.is_special_event && m.special_event_calories ? m.special_event_calories : m.calories || 0), 0)
+        const currentNutrition = consumed.reduce(
+          (acc: { protein: number; carbs: number; fat: number; fiber: number }, m: any) => ({
+            protein: acc.protein + (m.protein || 0),
+            carbs: acc.carbs + (m.carbs || 0),
+            fat: acc.fat + (m.fat || 0),
+            fiber: acc.fiber + (m.fiber || 0),
+          }),
+          { protein: 0, carbs: 0, fat: 0, fiber: 0 }
+        )
+        const targetCalories = profile?.calorie_target ?? 2000
+        const targetNutrition = {
+          protein: profile?.protein_target ?? 150,
+          carbs: profile?.carbs_target ?? 200,
+          fat: profile?.fat_target ?? 65,
+          fiber: profile?.fiber_target ?? 25,
+        }
+        setUserData({
+          currentCalories,
+          targetCalories,
+          remainingCalories: Math.max(0, targetCalories - currentCalories),
+          currentNutrition,
+          targetNutrition,
+        })
+      } catch (e) {
+        if (!cancelled) setUserData(defaultUserData)
+      } finally {
+        if (!cancelled) setUserDataReady(true)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // 從 localStorage 載入對話歷史；若無則顯示歡迎訊息
+  const messagesLoadedRef = useRef(false)
+  useEffect(() => {
+    if (messagesLoadedRef.current) return
+    messagesLoadedRef.current = true
+    const stored = localStorage.getItem('seekmeal_coach_messages')
     if (stored) {
       try {
-        const parsed = JSON.parse(stored)
-        setUserData(parsed)
-      } catch (error) {
-        console.error('Failed to parse userData from localStorage:', error)
+        const parsed = JSON.parse(stored) as Array<Omit<Message, 'timestamp'> & { timestamp: number }>
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) })))
+          return
+        }
+      } catch (e) {
+        console.error('Failed to parse coach messages', e)
       }
     }
-  }, [])
-  
-  // 初始化對話（歡迎訊息）
-  useEffect(() => {
-    const initialMessage: Message = {
+    setMessages([{
       id: '1',
       role: 'assistant',
-      content: `你好！我係你嘅 AI 飲食教練 💬
+      content: '你好！我係你嘅 AI 飲食教練 💬\n\n有咩可以幫到你？',
+      timestamp: new Date(),
+    }])
+  }, [])
 
-今日你已經食咗 ${userData.currentCalories} 卡，仲有 ${userData.remainingCalories} 卡。
-
-有咩可以幫到你？`,
-      timestamp: new Date()
+  // 持久化對話到 localStorage（取最近 50 則）
+  useEffect(() => {
+    if (messages.length === 0) return
+    try {
+      const toSave = messages.slice(-50).map((m) => ({ ...m, timestamp: m.timestamp.getTime() }))
+      localStorage.setItem('seekmeal_coach_messages', JSON.stringify(toSave))
+    } catch (e) {
+      console.error('Failed to save coach messages', e)
     }
-    setMessages([initialMessage])
-  }, [userData])
+  }, [messages])
   
   // 自動滾動到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
   
-  // 發送訊息
-  const handleSend = async () => {
-    if (!input.trim() || isTyping) return
-    
+  // 發送訊息（可傳入快捷問題文字直接發送）
+  const handleSend = async (quickMessage?: string) => {
+    const textToSend = (quickMessage ?? input.trim()).trim()
+    if (!textToSend || isTyping) return
+
     // 檢查請求間隔（避免觸發速率限制）
     const now = Date.now()
     const timeSinceLastRequest = now - lastRequestTime
@@ -112,32 +171,25 @@ export default function CoachPage() {
       setMessages(prev => [...prev, errorMessage])
       return
     }
-    
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: textToSend,
       timestamp: new Date()
     }
-    
-    const currentInput = input
-    setInput('')
+    if (!quickMessage) setInput('')
     setIsTyping(true)
-    setLastRequestTime(now) // 記錄請求時間
-    
-    // 先更新消息列表（显示用户消息）
+    setLastRequestTime(now)
+
     setMessages(prev => [...prev, userMessage])
-    
-    // 構建包含新用戶消息的對話歷史
+
     const conversationHistory = [
       ...messages.map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content
       })),
-      {
-        role: 'user' as const,
-        content: currentInput
-      }
+      { role: 'user' as const, content: textToSend }
     ]
     
     let errorData: any = {} // 在外部作用域定义，以便在 catch 块中使用
@@ -147,7 +199,7 @@ export default function CoachPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: currentInput,
+          message: textToSend,
           userData,
           conversationHistory
         })
@@ -260,16 +312,18 @@ export default function CoachPage() {
     }
   }
   
-  // 快捷問題
+  // 快捷問題（5～6 個，點擊直接發送）
   const quickQuestions = [
     '而家可以食咩？',
     '點樣增加蛋白質？',
-    '夜晚肚餓點算？',
-    '明日餐單有咩建議？'
+    '點解體重冇變？',
+    '外食點揀好？',
+    '幾時食最好？',
+    '明日餐單有咩建議？',
   ]
-  
+
   const handleQuickQuestion = (question: string) => {
-    setInput(question)
+    handleSend(question)
   }
   
   // Enter 發送
@@ -363,23 +417,22 @@ export default function CoachPage() {
         <div ref={messagesEndRef} />
       </div>
       
-      {/* Quick Questions */}
-      {messages.length <= 2 && (
-        <div className="px-4 py-3 bg-white border-t max-w-2xl w-full mx-auto">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {quickQuestions.map(q => (
-              <button
-                key={q}
-                onClick={() => handleQuickQuestion(q)}
-                type="button"
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm whitespace-nowrap transition-colors flex-shrink-0"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
+      {/* 快捷問題（5～6 個，點擊直接發送） */}
+      <div className="px-4 py-3 bg-white border-t max-w-2xl w-full mx-auto">
+        <div className="flex gap-2 overflow-x-auto pb-2 flex-wrap justify-center">
+          {quickQuestions.map((q) => (
+            <button
+              key={q}
+              onClick={() => handleQuickQuestion(q)}
+              disabled={isTyping}
+              type="button"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm whitespace-nowrap transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {q}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
       
         {/* Input (above bottom nav) */}
         <div className="fixed bottom-16 left-0 right-0 bg-white border-t px-4 py-3 shadow-lg">

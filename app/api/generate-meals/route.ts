@@ -8,6 +8,10 @@ export const dynamic = 'force-dynamic'
 /** 允許 Gemini 呼叫 + 重試 + DB 寫入有足夠時間完成（避免在「Average errors」後因逾時中斷） */
 export const maxDuration = 60
 
+/** 短期快取：同一用戶、同一開始日、同一 days 在 TTL 內不重複呼叫 Gemini（減輕 429） */
+const generationCache = new Map<string, { timestamp: number; data: unknown }>()
+const CACHE_TTL_MS = 60_000 // 1 分鐘
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -37,6 +41,18 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 })
+    }
+
+    // 快取 key：同一用戶、同一開始日、同一 days
+    const startDateStr =
+      clientStartDate && /^\d{4}-\d{2}-\d{2}$/.test(String(clientStartDate))
+        ? String(clientStartDate)
+        : new Date().toISOString().slice(0, 10)
+    const cacheKey = `${userId}-${startDateStr}-${days}`
+    const cached = generationCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      console.log('💾 Returning cached meal generation for', cacheKey)
+      return NextResponse.json(cached.data as object)
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -306,9 +322,9 @@ JSON 結構：
 
     console.log('📤 Sending request to Gemini...')
 
-    // 429 重試：較長退避讓配額有時間恢復（若 Vercel 逾時可調高 Function 的 maxDuration）
-    const maxRetries = 4
-    const rateLimitDelaysMs = [0, 5000, 15000, 30000] // 第 1 次不等，之後 5s / 15s / 30s
+    // 429 重試：更長退避以減輕限流（10s / 20s / 40s）
+    const maxRetries = 3
+    const rateLimitDelaysMs = [0, 10000, 20000, 40000]
     let retryCount = 0
     let result, response, text
 
@@ -661,7 +677,7 @@ JSON 結構：
       fiber: fiberError.toFixed(1) + '%',
     })
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       skipped: !!skipped,
       insertedMealsCount: mealsToInsert.length,
@@ -680,7 +696,9 @@ JSON 結構：
         },
         dayStats: dayStats, // 每天的詳細統計
       },
-    })
+    }
+    generationCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload })
+    return NextResponse.json(responsePayload)
   } catch (error: any) {
     console.error('❌ Error generating meals:', {
       message: error.message,

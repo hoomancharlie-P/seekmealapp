@@ -145,6 +145,14 @@ export default function Home() {
     fetchProfile()
   }, [user, authLoading])
 
+  // 未完成 Onboarding 則導向 onboarding 頁（避免重啟後又要重新輸入）
+  useEffect(() => {
+    if (authLoading || loadingProfile || !user) return
+    if (profile && profile.onboarding_completed === false) {
+      router.replace('/onboarding')
+    }
+  }, [authLoading, loadingProfile, user, profile, router])
+
   // 偵測 DB 是否有 special_event_ai_suggestions 欄位（有就完全唔用 localStorage）
   useEffect(() => {
     if (authLoading) return
@@ -3093,59 +3101,30 @@ export default function Home() {
         </div>
       </BottomSheet>
 
-      {/* 智能推薦選擇 */}
-      {replacementMode === 'smart' && !smartGenerating && smartOptions.length === 0 && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setReplacementMode('select')
-              setSmartParams({
-                taste: '',
-                location: '',
-                style: '',
-                cuisines: [],
-                foodType: '',
-                customInput: ''
-              })
-            }
-          }}
-        >
-          <motion.div
-            initial={{ y: 300, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 pb-8"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                💭 唔知{(() => {
-                  const names: Record<string, string> = {
-                    breakfast: '早餐',
-                    lunch: '午餐',
-                    dinner: '晚餐',
-                    snack: '小食'
-                  }
-                  return names[replacingMeal?.type || ''] || '餐次'
-                })()}食咩好
-              </h3>
-              <button
-                onClick={() => {
-                  setReplacementMode('select')
-                  setSmartParams({
-                    taste: '',
-                    location: '',
-                    style: '',
-                    cuisines: [],
-                    foodType: '',
-                    customInput: ''
-                  })
-                }}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-            
+      {/* 智能推薦選擇 - Bottom Sheet */}
+      <BottomSheet
+        isOpen={!!(replacementMode === 'smart' && !smartGenerating && smartOptions.length === 0)}
+        onClose={() => {
+          setReplacementMode('select')
+          setSmartParams({
+            taste: '',
+            location: '',
+            style: '',
+            cuisines: [],
+            foodType: '',
+            customInput: ''
+          })
+        }}
+        title={`💭 唔知${replacingMeal ? (() => {
+          const names: Record<string, string> = {
+            breakfast: '早餐',
+            lunch: '午餐',
+            dinner: '晚餐',
+            snack: '小食'
+          }
+          return names[replacingMeal.type] || '餐次'
+        })() : ''}食咩好`}
+      >
             <div className="space-y-4">
               {/* 口味 */}
               <div>
@@ -3337,6 +3316,7 @@ export default function Home() {
                 返回
               </button>
               <button
+                type="button"
                 onClick={() => handleSmartRecommend()}
                 disabled={!smartParams.taste || !smartParams.location || !smartParams.style}
                 className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3344,9 +3324,7 @@ export default function Home() {
                 ✨ 開始推薦
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
+      </BottomSheet>
 
       {/* 智能推薦加載 - Bottom Sheet */}
       <BottomSheet
@@ -3564,7 +3542,7 @@ export default function Home() {
       {/* 選項詳情（已整合到結果頁面，此彈窗不再需要） */}
       {false && selectedOption && !adjustmentChoice && (
         <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center p-4"
+          className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setSelectedOption(null)
@@ -3736,7 +3714,7 @@ export default function Home() {
       <AnimatePresence>
         {manualRecording && (
           <div 
-            className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center"
+            className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 if (manualRecording.foods.length > 0) {
@@ -4190,7 +4168,7 @@ export default function Home() {
       <AnimatePresence>
         {managingFoods && (
           <div 
-            className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center sm:justify-center"
+            className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 setManagingFoods(null)

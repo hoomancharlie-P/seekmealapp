@@ -47,7 +47,7 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
 
       const { data: meals, error } = await db
         .from('meals')
-        .select('date, calories, consumed')
+        .select('date, calories, protein, consumed')
         .eq('user_id', userId)
         .gte('date', weekStartStr)
         .lte('date', weekEndStr)
@@ -56,17 +56,22 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
 
       const days = ['日', '一', '二', '三', '四', '五', '六']
       const chartData: any[] = []
+      const proteinTarget = profile?.protein_target ?? 0
 
       for (let i = 0; i < 7; i++) {
         const date = new Date(weekStart)
         date.setDate(weekStart.getDate() + i)
         const dateStr = toLocalDateStr(date)
 
-        type MealRow = { date: string; consumed: boolean; calories?: number }
+        type MealRow = { date: string; consumed: boolean; calories?: number; protein?: number }
         const dayMeals = (meals as MealRow[] | null)?.filter(m => m.date === dateStr && m.consumed) || []
         const totalCalories = dayMeals.reduce((sum: number, m: MealRow) => sum + (m.calories || 0), 0)
+        const totalProtein = dayMeals.reduce((sum: number, m: MealRow) => sum + (m.protein || 0), 0)
         const target = profile?.calorie_target || 2000
         const percentage = totalCalories > 0 ? (totalCalories / target) * 100 : 0
+        const proteinPercentage = proteinTarget > 0 && totalProtein > 0
+          ? (totalProtein / proteinTarget) * 100
+          : 0
 
         chartData.push({
           day: days[i],
@@ -75,6 +80,9 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
           calories: totalCalories,
           target,
           percentage,
+          totalProtein,
+          proteinTarget,
+          proteinPercentage,
           isToday: dateStr === todayStr,
           meals: dayMeals,
         })
@@ -85,12 +93,17 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
       const avgCalories = completedDays.length > 0
         ? Math.round(completedDays.reduce((sum, d) => sum + d.calories, 0) / completedDays.length)
         : 0
+      const avgProtein = completedDays.length > 0 && proteinTarget > 0
+        ? Math.round(completedDays.reduce((sum, d) => sum + d.totalProtein, 0) / completedDays.length)
+        : 0
 
       setStats({
         targetDays: targetDays.length,
         totalDays: completedDays.length,
         targetRate: completedDays.length > 0 ? Math.round((targetDays.length / completedDays.length) * 100) : 0,
         avgCalories,
+        avgProtein,
+        proteinTarget,
       })
       setData(chartData)
     } catch (error) {
@@ -122,7 +135,7 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
   return (
     <div className="space-y-4">
       {stats && stats.totalDays > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="bg-green-50 rounded-xl p-4 text-center">
             <div className="text-sm text-gray-600 mb-1">達標天數</div>
             <div className="text-2xl font-bold text-gray-900">
@@ -130,10 +143,17 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
             </div>
           </div>
           <div className="bg-blue-50 rounded-xl p-4 text-center">
-            <div className="text-sm text-gray-600 mb-1">平均攝入</div>
+            <div className="text-sm text-gray-600 mb-1">平均卡路里</div>
             <div className="text-2xl font-bold text-gray-900">{stats.avgCalories}</div>
             <div className="text-xs text-gray-500">卡/天</div>
           </div>
+          {stats.proteinTarget > 0 && (
+            <div className="bg-amber-50 rounded-xl p-4 text-center">
+              <div className="text-sm text-gray-600 mb-1">平均蛋白質</div>
+              <div className="text-2xl font-bold text-gray-900">{stats.avgProtein}g</div>
+              <div className="text-xs text-gray-500">/ {stats.proteinTarget}g 目標</div>
+            </div>
+          )}
           <div className="bg-purple-50 rounded-xl p-4 text-center">
             <div className="text-sm text-gray-600 mb-1">達標率</div>
             <div className="text-2xl font-bold text-gray-900">{stats.targetRate}%</div>
@@ -163,9 +183,10 @@ export default function WeeklyProgressChart({ userId, profile }: WeeklyProgressC
                       </div>
                       {d.calories > 0 ? (
                         <>
-                          <div className="text-sm text-gray-700">攝入：{d.calories} 卡</div>
-                          <div className="text-sm text-gray-700">目標：{d.target} 卡</div>
-                          <div className="text-sm text-gray-700">達成：{d.percentage.toFixed(1)}%</div>
+                          <div className="text-sm text-gray-700">卡路里：{d.calories} / {d.target} 卡（{d.percentage.toFixed(0)}%）</div>
+                          {d.proteinTarget > 0 && (
+                            <div className="text-sm text-gray-700">蛋白質：{d.totalProtein} / {d.proteinTarget}g（{d.proteinPercentage.toFixed(0)}%）</div>
+                          )}
                           <div className="text-xs text-gray-500 mt-1">點擊查看詳情</div>
                         </>
                       ) : (
