@@ -457,7 +457,7 @@ export default function CoachPage() {
               style={{ minHeight: '48px' }}
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={!input.trim() || isTyping}
               type="button"
               className="px-6 py-3 bg-primary-500 text-white rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-600 transition-colors font-medium shadow-md hover:shadow-lg"
