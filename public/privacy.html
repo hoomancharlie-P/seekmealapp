@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>私隱政策 | SeekMeal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green-deep: #1B5E20;
+      --green-mid: #2E7D32;
+      --green-bright: #4CAF50;
+      --green-light: #C8E6C9;
+      --green-pale: #F1F8F1;
+      --ink: #1A1A1A;
+      --ink-mid: #444;
+      --ink-light: #777;
+      --rule: #E0EFE0;
+      --white: #ffffff;
+      --page-bg: #FAFDF9;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--page-bg);
+      color: var(--ink);
+      line-height: 1.75;
+      font-size: 16px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--white);
+      border-bottom: 1px solid var(--rule);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .logo-mark {
+      width: 32px; height: 32px;
+      background: var(--green-bright);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+    }
+
+    .logo-name {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+    }
+
+    .lang-switcher {
+      display: flex;
+      gap: 4px;
+      background: var(--green-pale);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    .lang-btn {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: transparent;
+      color: var(--ink-light);
+    }
+
+    .lang-btn.active {
+      background: var(--white);
+      color: var(--green-deep);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    /* ── Hero band ── */
+    .hero {
+      background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 100%);
+      color: var(--white);
+      padding: 56px 24px 48px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      color: var(--green-light);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .hero-meta {
+      font-size: 14px;
+      color: rgba(255,255,255,0.65);
+    }
+
+    /* ── TOC ── */
+    .toc-wrap {
+      max-width: 760px;
+      margin: 40px auto 0;
+      padding: 0 24px;
+    }
+
+    .toc {
+      background: var(--white);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 24px 28px;
+    }
+
+    .toc-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+      margin-bottom: 14px;
+    }
+
+    .toc ol {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 24px;
+    }
+
+    @media (max-width: 500px) {
+      .toc ol { grid-template-columns: 1fr; }
+    }
+
+    .toc li a {
+      font-size: 14px;
+      color: var(--green-mid);
+      text-decoration: none;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .toc li a:hover { color: var(--green-bright); text-decoration: underline; }
+
+    .toc-num {
+      font-size: 11px;
+      color: var(--green-bright);
+      font-weight: 600;
+      min-width: 18px;
+    }
+
+    /* ── Main content ── */
+    main {
+      max-width: 760px;
+      margin: 40px auto 80px;
+      padding: 0 24px;
+    }
+
+    section {
+      margin-bottom: 48px;
+      scroll-margin-top: 80px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--green-light);
+    }
+
+    .section-num {
+      width: 32px; height: 32px;
+      background: var(--green-bright);
+      color: white;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--green-deep);
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink-mid);
+      margin: 24px 0 10px;
+    }
+
+    p {
+      font-size: 15px;
+      color: var(--ink-mid);
+      margin-bottom: 14px;
+    }
+
+    ul {
+      list-style: none;
+      margin: 10px 0 14px;
+    }
+
+    ul li {
+      font-size: 15px;
+      color: var(--ink-mid);
+      padding: 6px 0 6px 22px;
+      position: relative;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    ul li:last-child { border-bottom: none; }
+
+    ul li::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 15px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green-bright);
+    }
+
+    /* Callout box */
+    .callout {
+      background: var(--green-pale);
+      border-left: 3px solid var(--green-bright);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: var(--ink-mid);
+    }
+
+    /* Contact box */
+    .contact-box {
+      background: var(--white);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .contact-icon {
+      width: 44px; height: 44px;
+      background: var(--green-pale);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .contact-email {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--green-mid);
+    }
+
+    .contact-label { font-size: 13px; color: var(--ink-light); }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--white);
+      border-top: 1px solid var(--rule);
+      text-align: center;
+      padding: 32px 24px;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: var(--green-mid);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .footer-links a:hover { text-decoration: underline; }
+    .footer-links a.active { color: var(--ink-light); pointer-events: none; }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--ink-light);
+    }
+
+    /* ── Language-dependent visibility ── */
+    .zh { display: block; }
+    .en { display: none; }
+    body.lang-en .zh { display: none; }
+    body.lang-en .en { display: block; }
+    body.lang-en .en-inline { display: inline; }
+    body.lang-en .zh-inline { display: none; }
+    .en-inline { display: none; }
+    .zh-inline { display: inline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a href="#" class="logo">
+      <div class="logo-mark">🥗</div>
+      <span class="logo-name">SeekMeal</span>
+    </a>
+    <div class="lang-switcher">
+      <button class="lang-btn active" onclick="setLang('zh')" id="btn-zh">繁中</button>
+      <button class="lang-btn" onclick="setLang('en')" id="btn-en">EN</button>
+    </div>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-badge zh">私隱保護</div>
+  <div class="hero-badge en">Privacy Protection</div>
+  <h1>
+    <span class="zh">私隱政策</span>
+    <span class="en">Privacy Policy</span>
+  </h1>
+  <p class="hero-meta">
+    <span class="zh">生效日期：2026年2月22日</span>
+    <span class="en">Effective Date: February 22, 2026</span>
+  </p>
+</div>
+
+<div class="toc-wrap">
+  <div class="toc">
+    <div class="toc-title zh">目錄</div>
+    <div class="toc-title en">Contents</div>
+    <ol>
+      <li><a href="#s1"><span class="toc-num">1</span><span class="zh">簡介</span><span class="en">Introduction</span></a></li>
+      <li><a href="#s2"><span class="toc-num">2</span><span class="zh">我們收集的資料</span><span class="en">Data We Collect</span></a></li>
+      <li><a href="#s3"><span class="toc-num">3</span><span class="zh">如何使用資料</span><span class="en">How We Use Data</span></a></li>
+      <li><a href="#s4"><span class="toc-num">4</span><span class="zh">第三方服務</span><span class="en">Third-Party Services</span></a></li>
+      <li><a href="#s5"><span class="toc-num">5</span><span class="zh">數據安全</span><span class="en">Data Security</span></a></li>
+      <li><a href="#s6"><span class="toc-num">6</span><span class="zh">數據保留</span><span class="en">Data Retention</span></a></li>
+      <li><a href="#s7"><span class="toc-num">7</span><span class="zh">您的權利</span><span class="en">Your Rights</span></a></li>
+      <li><a href="#s8"><span class="toc-num">8</span><span class="zh">兒童私隱</span><span class="en">Children's Privacy</span></a></li>
+      <li><a href="#s9"><span class="toc-num">9</span><span class="zh">政策變更</span><span class="en">Policy Changes</span></a></li>
+      <li><a href="#s10"><span class="toc-num">10</span><span class="zh">聯絡我們</span><span class="en">Contact Us</span></a></li>
+    </ol>
+  </div>
+</div>
+
+<main>
+
+  <section id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2><span class="zh">簡介</span><span class="en">Introduction</span></h2>
+    </div>
+    <p class="zh">歡迎使用 SeekMeal。本私隱政策說明我們在您使用本應用程式及相關服務時，如何收集、使用、儲存及保護您的個人資料。使用 SeekMeal 即表示您同意本政策所述的做法。</p>
+    <p class="en">Welcome to SeekMeal. This Privacy Policy explains how we collect, use, store, and protect your personal information when you use our mobile application and related services. By using SeekMeal, you agree to the practices described in this policy.</p>
+    <p class="zh">如您不同意本私隱政策，請停止使用本應用程式。</p>
+    <p class="en">If you do not agree with this Privacy Policy, please do not use our application.</p>
+  </section>
+
+  <section id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2><span class="zh">我們收集的資料</span><span class="en">Information We Collect</span></h2>
+    </div>
+    <h3 class="zh">2.1 您直接提供的資料</h3>
+    <h3 class="en">2.1 Information You Provide Directly</h3>
+    <ul>
+      <li><span class="zh">帳戶資料：用戶名稱、電郵地址</span><span class="en">Account information: username, email address</span></li>
+      <li><span class="zh">個人檔案：身高、體重、目標體重、年齡、性別</span><span class="en">Personal profile: height, weight, target weight, age, gender</span></li>
+      <li><span class="zh">健康目標：卡路里目標、蛋白質／碳水化合物／脂肪目標</span><span class="en">Health goals: calorie targets, protein/carbohydrate/fat goals</span></li>
+      <li><span class="zh">飲食偏好：食物限制、過敏原</span><span class="en">Dietary preferences: food restrictions, allergies</span></li>
+      <li><span class="zh">飲食記錄：已進食的食物、份量、用餐時間</span><span class="en">Meal logs: foods consumed, portion sizes, meal timing</span></li>
+      <li><span class="zh">體重記錄：定期輸入的體重數據</span><span class="en">Weight records: body weight entries over time</span></li>
+    </ul>
+
+    <h3 class="zh">2.2 應用程式生成的資料</h3>
+    <h3 class="en">2.2 Information Generated by the App</h3>
+    <ul>
+      <li><span class="zh">根據您的個人檔案由 AI 生成的餐單</span><span class="en">AI-generated meal plans based on your profile</span></li>
+      <li><span class="zh">營養追蹤數據及進度統計</span><span class="en">Nutrition tracking data and progress statistics</span></li>
+      <li><span class="zh">連續記錄天數及活動記錄</span><span class="en">Streak and activity records</span></li>
+      <li><span class="zh">特殊活動的餐單調整</span><span class="en">Special event meal adjustments</span></li>
+    </ul>
+
+    <h3 class="zh">2.3 技術資料</h3>
+    <h3 class="en">2.3 Technical Information</h3>
+    <ul>
+      <li><span class="zh">裝置類型及作業系統版本</span><span class="en">Device type and operating system version</span></li>
+      <li><span class="zh">應用程式使用模式及功能互動記錄</span><span class="en">App usage patterns and feature interactions</span></li>
+      <li><span class="zh">用於除錯的錯誤日誌</span><span class="en">Error logs for debugging purposes</span></li>
+      <li><span class="zh">語言及地區偏好設定</span><span class="en">Language and regional preferences</span></li>
+    </ul>
+  </section>
+
+  <section id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2><span class="zh">如何使用您的資料</span><span class="en">How We Use Your Information</span></h2>
+    </div>
+    <ul>
+      <li><span class="zh">生成個人化 AI 餐單及營養建議</span><span class="en">To generate personalised AI meal plans and nutrition recommendations</span></li>
+      <li><span class="zh">透過應用程式內的 AI 教練功能提供飲食指導</span><span class="en">To provide AI coaching and dietary advice through the in-app coach</span></li>
+      <li><span class="zh">計算及追蹤您的每日營養攝取量</span><span class="en">To calculate and track your daily nutritional intake</span></li>
+      <li><span class="zh">顯示您的進度、連續記錄天數及體重趨勢</span><span class="en">To display your progress, streaks, and weight trends</span></li>
+      <li><span class="zh">改善及優化應用程式</span><span class="en">To improve and optimise the application</span></li>
+      <li><span class="zh">提供客戶支援</span><span class="en">To provide customer support</span></li>
+      <li><span class="zh">確保服務的安全性及完整性</span><span class="en">To ensure the security and integrity of our services</span></li>
+    </ul>
+  </section>
+
+  <section id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2><span class="zh">第三方服務</span><span class="en">Third-Party Services</span></h2>
+    </div>
+    <h3>Supabase</h3>
+    <p class="zh">您的帳戶資料及健康資訊安全地儲存於位於美國的 Supabase 伺服器。Supabase 依據其私隱政策處理您的資料。</p>
+    <p class="en">Your account data and health information are stored securely on Supabase servers located in the United States, processed in accordance with their privacy policy.</p>
+    <h3>Google Gemini API</h3>
+    <p class="zh">您的飲食偏好、營養目標及餐飲相關查詢將傳送至 Google 的 Gemini AI API，以生成餐單建議及教練回應。我們不會向 Google API 傳送可識別個人身份的資料，例如您的姓名或電郵地址。</p>
+    <p class="en">Your dietary preferences, nutritional goals, and meal-related queries are sent to Google's Gemini AI API to generate meal recommendations and coaching responses. We do not send personally identifiable information such as your name or email to Google's API.</p>
+  </section>
+
+  <section id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2><span class="zh">數據儲存及安全</span><span class="en">Data Storage and Security</span></h2>
+    </div>
+    <ul>
+      <li><span class="zh">所有數據均使用 TLS/HTTPS 加密傳輸</span><span class="en">All data is transmitted using TLS/HTTPS encryption</span></li>
+      <li><span class="zh">密碼不以明文儲存；身份驗證由 Supabase Auth 管理</span><span class="en">Passwords are never stored in plain text; authentication is managed by Supabase Auth</span></li>
+      <li><span class="zh">我們實施存取控制，限制可存取您數據的人員</span><span class="en">We implement access controls to limit who can access your data</span></li>
+      <li><span class="zh">我們定期進行系統安全審查</span><span class="en">We conduct regular security reviews of our systems</span></li>
+    </ul>
+    <div class="callout zh">儘管我們採取合理的預防措施，但電子儲存或傳輸方式並非百分之百安全。我們無法保證您的數據的絕對安全性。</div>
+    <div class="callout en">While we take reasonable precautions, no method of electronic storage or transmission is 100% secure. We cannot guarantee absolute security of your data.</div>
+  </section>
+
+  <section id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2><span class="zh">數據保留</span><span class="en">Data Retention</span></h2>
+    </div>
+    <p class="zh">我們在您的帳戶有效期間保留您的個人數據。如您刪除帳戶，我們將在 30 天內刪除您的個人數據，但法律或法規要求保留的情況除外。</p>
+    <p class="en">We retain your personal data for as long as your account is active. If you delete your account, we will delete your personal data within 30 days, except where required by law.</p>
+  </section>
+
+  <section id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2><span class="zh">您的權利</span><span class="en">Your Rights</span></h2>
+    </div>
+    <ul>
+      <li><span class="zh">查閱：要求查閱我們持有的您的數據副本</span><span class="en">Access: Request a copy of the data we hold about you</span></li>
+      <li><span class="zh">更正：要求更正不準確的數據</span><span class="en">Correction: Request correction of inaccurate data</span></li>
+      <li><span class="zh">刪除：要求刪除您的帳戶及相關數據</span><span class="en">Deletion: Request deletion of your account and associated data</span></li>
+      <li><span class="zh">數據可攜性：要求以可讀格式匯出您的數據</span><span class="en">Portability: Request an export of your data in a readable format</span></li>
+      <li><span class="zh">反對：對某些數據使用方式提出反對</span><span class="en">Objection: Object to certain uses of your data</span></li>
+    </ul>
+    <p class="zh">如需行使上述任何權利，請聯絡我們：<strong>support@seekmeal.app</strong></p>
+    <p class="en">To exercise any of these rights, please contact us at: <strong>support@seekmeal.app</strong></p>
+  </section>
+
+  <section id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2><span class="zh">兒童私隱</span><span class="en">Children's Privacy</span></h2>
+    </div>
+    <p class="zh">SeekMeal 不適合 13 歲以下兒童使用。我們不會故意收集 13 歲以下兒童的個人資料。如發現 13 歲以下兒童向我們提供了個人資料，我們將立即予以刪除。</p>
+    <p class="en">SeekMeal is not intended for use by children under the age of 13. We do not knowingly collect personal information from children under 13. If we discover that a child under 13 has provided us with personal information, we will delete it immediately.</p>
+  </section>
+
+  <section id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2><span class="zh">政策變更</span><span class="en">Policy Changes</span></h2>
+    </div>
+    <p class="zh">我們可能會不時更新本私隱政策。如有重大變更，我們將在應用程式內發布通知並更新生效日期。您在變更生效後繼續使用本應用程式，即表示您接受更新後的政策。</p>
+    <p class="en">We may update this Privacy Policy from time to time. We will notify you of any significant changes by posting the new policy within the app and updating the effective date. Your continued use of the app after changes constitutes acceptance of the updated policy.</p>
+  </section>
+
+  <section id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2><span class="zh">聯絡我們</span><span class="en">Contact Us</span></h2>
+    </div>
+    <div class="contact-box">
+      <div class="contact-icon">✉️</div>
+      <div>
+        <div class="contact-label zh">如對本私隱政策有任何疑問，請聯絡我們</div>
+        <div class="contact-label en">For questions about this Privacy Policy, contact us at</div>
+        <div class="contact-email">support@seekmeal.app</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-links">
+    <a href="privacy.html" class="active zh">私隱政策</a>
+    <a href="privacy.html" class="active en">Privacy Policy</a>
+    <a href="terms.html"><span class="zh">服務條款</span><span class="en">Terms of Service</span></a>
+    <a href="disclaimer.html"><span class="zh">免責聲明</span><span class="en">Health Disclaimer</span></a>
+  </div>
+  <p class="footer-copy">© 2026 SeekMeal. <span class="zh">保留所有權利。</span><span class="en">All rights reserved.</span></p>
+</footer>
+
+<script>
+  function setLang(lang) {
+    document.body.className = lang === 'en' ? 'lang-en' : '';
+    document.getElementById('btn-zh').className = 'lang-btn' + (lang === 'zh' ? ' active' : '');
+    document.getElementById('btn-en').className = 'lang-btn' + (lang === 'en' ? ' active' : '');
+    localStorage.setItem('seekmeal-lang', lang);
+  }
+  // Restore preference
+  const saved = localStorage.getItem('seekmeal-lang');
+  if (saved) setLang(saved);
+</script>
+</body>
+</html>

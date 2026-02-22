@@ -27,10 +27,12 @@ export async function POST(request: NextRequest) {
       dietaryHabit = 'none',
       allergies = [],
       forceReplace = false,
-      startDate: clientStartDate
+      clearCache = false,
+      startDate: clientStartDate,
+      locale = 'zh-TW'
     } = body
 
-    console.log('🤖 Generating meals for user (v2 DB-first):', userId)
+    console.log('🤖 Generating meals for user (v2 DB-first):', userId, 'locale:', locale)
     console.log('📊 Targets:', { calorieTarget, proteinTarget, carbsTarget, fatTarget, fiberTarget })
     console.log('🍽️ Dietary preferences:', { dietaryRestrictions, dietaryHabit, allergies })
 
@@ -49,6 +51,13 @@ export async function POST(request: NextRequest) {
         ? String(clientStartDate)
         : new Date().toISOString().slice(0, 10)
     const cacheKey = `${userId}-${startDateStr}-${days}`
+
+    if (clearCache || forceReplace) {
+      const keysToDelete = Array.from(generationCache.keys()).filter((k) => k.startsWith(`${userId}-`))
+      keysToDelete.forEach((k) => generationCache.delete(k))
+      console.log('🗑️ Cleared cache for user:', userId, keysToDelete.length, 'entries')
+    }
+
     const cached = generationCache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
       console.log('💾 Returning cached meal generation for', cacheKey)
@@ -153,6 +162,10 @@ export async function POST(request: NextRequest) {
       ? `- 過敏食物：${allergies.join('、')}\n- 🚨 非常重要：餐單中絕對不能包含以上食材（會導致過敏反應）\n- 請仔細檢查每一項食物，確保不含過敏原\n`
       : ''
 
+    const languageInstruction = locale === 'en'
+      ? '**Language (CRITICAL)**: Generate all food names and meal descriptions in English. Use common English terms (e.g. "Chicken Breast", "Brown Rice", "Steamed Broccoli", "Scrambled Eggs"). Do not use Chinese characters in food names.'
+      : '**語言（CRITICAL）**：只使用繁體中文（廣東話）。絕對禁止使用英文、拼音、孟加拉文或其他外語字符（除非是常用的英文縮寫如 BBQ）。'
+
     // 構建 prompt
     const prompt = `你是一個專業的香港營養師，專門為香港用戶設計餐單。
 
@@ -177,10 +190,8 @@ ${restrictionsText}${habitText}${allergiesText}
 設計要求：
 
 1. 食物名稱和份量（CRITICAL - 語言限制）：
-   - **只使用繁體中文（廣東話）**
-   - **絕對禁止使用英文、拼音、孟加拉文或其他外語字符**（除非是常用的英文縮寫如 BBQ）
-   - 不要包含原文翻譯（例如：不要出現 "মাছ" 或其他非中文字符）
-   - 明確份量（例如：雞蛋 2隻、雞胸肉 150g、糙米飯 1碗）
+   - ${languageInstruction}
+   - 明確份量（中文模式例如：雞蛋 2隻、雞胸肉 150g、糙米飯 1碗；英文模式例如：2 Eggs, 150g Chicken Breast, 1 bowl Brown Rice）
    - 不要用小數份量（例如：不要「雞蛋 1.5隻」，用「雞蛋 2隻」）
    - **視覺化份量描述（CRITICAL）**：
      - 對於需要秤重或抽象的單位（如 g、克、碗、杯），必須在括號內加入視覺輔助描述。
@@ -305,7 +316,7 @@ JSON 結構：
 - emoji: breakfast="🌅", lunch="🌤️", dinner="🌙", snack="🍎"
 - calories, protein, carbs, fat, fiber: 該餐的總營養素（必須準確，所有餐次總和 = 目標值）
 - foods: 該餐包含的食物清單
-  - name: 食物名稱 + 份量（必須是純廣東話，禁止英文/外語）
+  - name: 食物名稱 + 份量（${locale === 'en' ? 'Use English only for food names' : '必須是純廣東話，禁止英文/外語'}）
   - calories, protein, carbs, fat, fiber: 該食物的營養素（所有食物總和 = 該餐的營養素）
 
 總共生成：${days * 4} 個餐次（${days} 天 × 4 餐）
