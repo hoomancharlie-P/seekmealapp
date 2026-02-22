@@ -1,0 +1,16 @@
+# 環境變數
+.env
+.env.local
+.env.*.local
+
+# Next.js
+.next/
+out/
+
+# 依賴
+node_modules/
+
+# 編譯輸出
+*.tsbuildinfo
+next-env.d.ts
+.vercel
