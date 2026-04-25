@@ -213,7 +213,7 @@ function TravelWaitingPageContent() {
       return
     }
     
-    let intervalId: NodeJS.Timeout | null = null
+    let intervalId: ReturnType<typeof setInterval> | null = null
     let isDone = false
     let currentCheckCount = 0
     let lastMealCount = 0

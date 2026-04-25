@@ -333,51 +333,27 @@ JSON 結構：
 
     console.log('📤 Sending request to Gemini...')
 
-    // 429 重試：更長退避以減輕限流（10s / 20s / 40s）
-    const maxRetries = 3
-    const rateLimitDelaysMs = [0, 10000, 20000, 40000]
-    let retryCount = 0
     let result, response, text
-
-    while (retryCount < maxRetries) {
-      try {
-        if (retryCount > 0) {
-          const delay = rateLimitDelaysMs[Math.min(retryCount, rateLimitDelaysMs.length - 1)]
-          console.log(`⏳ [429] Waiting ${delay}ms before retry (attempt ${retryCount + 1}/${maxRetries})...`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-        }
-
-        console.log(`📤 Sending request to Gemini... (attempt ${retryCount + 1}/${maxRetries})`)
-        result = await model.generateContent(prompt)
-        response = result.response
-        text = response.text()
-
-        console.log('📥 Received response from Gemini')
-        console.log('Response length:', text.length)
-        break
-      } catch (apiError: any) {
-        const isRateLimitError =
-          apiError.message?.includes('429') ||
-          apiError.message?.includes('Too Many Requests') ||
-          apiError.message?.includes('Resource exhausted')
-
-        console.error(`❌ Error calling Gemini API (attempt ${retryCount + 1}/${maxRetries}):`, {
-          message: apiError.message,
-          isRateLimitError,
-          retryCount
-        })
-
-        if (isRateLimitError && retryCount < maxRetries - 1) {
-          retryCount++
-          console.log(`🔄 Rate limit (429), will retry after backoff (${retryCount}/${maxRetries})...`)
-          continue
-        }
-        throw apiError
+    try {
+      console.log('📤 Sending request to Gemini...')
+      result = await model.generateContent(prompt)
+      response = result.response
+      text = response.text()
+      console.log('📥 Received response from Gemini')
+      console.log('Response length:', text.length)
+    } catch (apiError: any) {
+      const isRateLimitError =
+        apiError.message?.includes('429') ||
+        apiError.message?.includes('Too Many Requests') ||
+        apiError.message?.includes('Resource exhausted')
+      if (isRateLimitError) {
+        throw new Error('今日 AI 配額已用完，請明天再試')
       }
+      throw apiError
     }
 
     if (!text) {
-      return NextResponse.json({ error: 'No response from AI', details: 'Empty response after retries' }, { status: 500 })
+      return NextResponse.json({ error: 'No response from AI', details: 'Empty response from Gemini' }, { status: 500 })
     }
 
     // 共用 JSON 抽取邏輯（lib/ai-json），減少 Unexpected token
@@ -726,8 +702,8 @@ JSON 結構：
     let errorDetails = error.message
     
     if (isRateLimitError) {
-      errorMessage = 'AI API 請求過於頻繁，請稍後重試'
-      errorDetails = 'API 請求達到限流，請等待 1-2 分鐘後再試'
+      errorMessage = '今日 AI 配額已用完，請明天再試'
+      errorDetails = 'Gemini API daily quota exceeded'
     } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
       errorMessage = 'AI API 認證失敗，請檢查 API 密鑰'
     } else if (error.message?.includes('404') || error.message?.includes('Not Found')) {

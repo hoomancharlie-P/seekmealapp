@@ -26,8 +26,13 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env*.local
 .env
+.env.local
+.env.*.local
+.env.development
+.env.production
+seekmeal-api/.env
+seekmeal-api/.env.local
 
 # vercel
 .vercel

@@ -213,6 +213,7 @@ export async function POST(request: NextRequest) {
     const {
       userId,
       mealType,
+      locale = 'zh-HK',
       mode,
       taste: bodyTaste,
       location: bodyLocation,
@@ -235,6 +236,7 @@ export async function POST(request: NextRequest) {
       secondOptionCalorieMultiplier = 1.3
     } = body
 
+    const isEnglish = typeof locale === 'string' && locale.toLowerCase().startsWith('en')
     const location = bodyLocation ?? prefLocation ?? 'eating_out'
     const cuisines = Array.isArray(bodyCuisines) && bodyCuisines.length > 0 ? bodyCuisines : (prefCuisine ? [prefCuisine] : [])
     const style = bodyStyle ?? prefMood ?? ''
@@ -242,54 +244,51 @@ export async function POST(request: NextRequest) {
     const customInput = bodyCustomInput ?? preferences.customInput ?? ''
     const taste = bodyTaste ?? (style === 'healthy' ? 'light' : style === 'filling' ? 'heavy' : 'random')
 
-    console.log('🤖 Smart meal recommendation:', { mealType, mode, numberOfOptions, requireDiversity, secondOptionCalorieMultiplier })
+    console.log('🤖 Smart meal recommendation:', { mealType, mode, locale, numberOfOptions, requireDiversity, secondOptionCalorieMultiplier })
     console.log('🎯 User preferences received:', { location, cuisines, style, taste, foodType, customInput: customInput ? `${String(customInput).slice(0, 50)}` : undefined })
     
     // 使用 v1beta API 中可用的模型（測試確認 gemini-2.0-flash 可用）
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     
     // 構建 prompt
-    const mealNames: Record<string, string> = {
-      breakfast: '早餐',
-      lunch: '午餐',
-      dinner: '晚餐',
-      snack: '小食'
-    }
+    const mealNames: Record<string, string> = isEnglish
+      ? { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack: 'snack' }
+      : { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '小食' }
     
-    const tasteText: Record<string, string> = {
-      light: '清淡',
-      heavy: '重口味',
-      random: '隨便'
-    }
+    const tasteText: Record<string, string> = isEnglish
+      ? { light: 'light', heavy: 'rich flavor', random: 'random' }
+      : { light: '清淡', heavy: '重口味', random: '隨便' }
     
-    const locationText: Record<string, string> = {
-      eating_out: '外食（茶餐廳、餐廳等）',
-      home_cook: '自己煮（家常菜）'
-    }
+    const locationText: Record<string, string> = isEnglish
+      ? { eating_out: 'eating out (restaurants/cafes)', home_cook: 'home cooking' }
+      : { eating_out: '外食（茶餐廳、餐廳等）', home_cook: '自己煮（家常菜）' }
     
-    const styleText: Record<string, string> = {
-      comfort: 'Comfort food（暖心、熟悉、療癒）',
-      healthy: '健康清爽（清淡、營養、無負擔）',
-      explore: '嘗試新鮮（探索、特別、不同）',
-      filling: '飽足有力（高蛋白、高能量）',
-      random: '完全隨機'
-    }
+    const styleText: Record<string, string> = isEnglish
+      ? {
+          comfort: 'comfort food',
+          healthy: 'healthy and light',
+          explore: 'explore new tastes',
+          filling: 'filling and high-protein',
+          random: 'fully random'
+        }
+      : {
+          comfort: 'Comfort food（暖心、熟悉、療癒）',
+          healthy: '健康清爽（清淡、營養、無負擔）',
+          explore: '嘗試新鮮（探索、特別、不同）',
+          filling: '飽足有力（高蛋白、高能量）',
+          random: '完全隨機'
+        }
     
-    const cuisineText: Record<string, string> = {
-      hk: '港式',
-      japanese: '日本',
-      korean: '韓國',
-      thai: '泰國',
-      western: '西餐',
-      other: '其他'
-    }
+    const cuisineText: Record<string, string> = isEnglish
+      ? { hk: 'Hong Kong style', japanese: 'Japanese', korean: 'Korean', thai: 'Thai', western: 'Western', other: 'Other' }
+      : { hk: '港式', japanese: '日本', korean: '韓國', thai: '泰國', western: '西餐', other: '其他' }
     
-    const foodTypeText: Record<string, string> = {
-      rice: '飯類',
-      noodles: '麵類',
-      soup: '湯類',
-      light: '輕食'
-    }
+    const foodTypeText: Record<string, string> = isEnglish
+      ? { rice: 'rice', noodles: 'noodles', soup: 'soup', light: 'light meal' }
+      : { rice: '飯類', noodles: '麵類', soup: '湯類', light: '輕食' }
+    const languageInstruction = isEnglish
+      ? 'CRITICAL Language: Return all food names, labels, and descriptions in English only. Do not use Chinese.'
+      : 'CRITICAL 語言：所有食物名稱與描述必須使用繁體中文（廣東話），不要使用英文。'
     
     // 計算當前餐次的目標卡路里
     const currentMealTarget = targetCalories
@@ -312,7 +311,76 @@ export async function POST(request: NextRequest) {
       const selectedStyleQuick = style ? styleText[style] : ''
       const selectedTasteQuick = taste ? tasteText[taste] : ''
       const selectedFoodTypeQuick = foodType ? foodTypeText[foodType] : ''
-      prompt = `【必須】回傳格式：僅能回傳 { "options": [ 選項A, 選項B ] }，即 **恰好 2 個** 不同餐單物件。**禁止**回傳單一 { "meal": ... } 物件。
+      if (isEnglish) {
+        prompt = `${languageInstruction}
+You are a professional nutrition coach.
+Generate exactly 2 distinct ${mealNames[mealType]} options based on user preferences.
+
+User preferences (must follow):
+1) Location: ${locationText[location] || 'eating out'}
+2) Cuisine: ${selectedCuisinesQuick || 'no strict cuisine, but keep diversity'}
+3) Style: ${selectedStyleQuick || 'no strict style'}
+4) Taste: ${selectedTasteQuick || 'no strict taste'}
+5) Main type: ${selectedFoodTypeQuick || 'no strict main type'}
+${customInput ? `6) Extra requirement: ${customInput}` : ''}
+
+Hard requirements:
+- Return JSON only in this exact shape: { "options": [ optionA, optionB ] }.
+- Exactly 2 options. Do not return a single "meal" object.
+- All food names, option labels, and descriptions must be English only.
+- If cuisine is provided, the main dishes must match that cuisine.
+- If main type is provided, dishes must match it (rice/noodles/soup/light meal).
+- Each option has 3-4 foods.
+- Sum of food calories must match option calories (small rounding error only).
+- Macros should be realistic and follow calories = protein*4 + carbs*4 + fat*9.
+${requireDiversity ? '- The two options must be clearly different dishes.' : ''}
+
+Target calories:
+- Base target: ${currentMealTarget} kcal.
+${style === 'healthy'
+  ? `- Both options must be within ±10% (${Math.round(currentMealTarget * 0.9)}-${Math.round(currentMealTarget * 1.1)} kcal).`
+  : `- At least one option must be within ±10% (${Math.round(currentMealTarget * 0.9)}-${Math.round(currentMealTarget * 1.1)} kcal). The second can be richer around ${Math.round(currentMealTarget * (typeof secondOptionCalorieMultiplier === 'number' ? secondOptionCalorieMultiplier : 1.3))} kcal.`}
+
+Nutrition targets (reference): protein ${targetProtein}g, carbs ${targetCarbs}g, fat ${targetFat}g, fiber ${targetFiber}g.
+Dietary restrictions: ${dietaryRestrictions && dietaryRestrictions.length > 0 ? dietaryRestrictions.join(', ') : 'none'}.
+Dietary habit: ${dietaryHabit && dietaryHabit !== 'none' ? dietaryHabit : 'none'}.
+Allergies: ${allergies && allergies.length > 0 ? allergies.join(', ') : 'none'}.
+
+Example output (JSON only):
+{
+  "options": [
+    {
+      "label": "Standard",
+      "calories": 520,
+      "protein": 28,
+      "carbs": 55,
+      "fat": 18,
+      "fiber": 3,
+      "foods": [
+        { "name": "Satay beef noodle soup", "portion": "1 bowl", "calories": 480, "protein": 26, "carbs": 48, "fat": 18, "fiber": 2 },
+        { "name": "Hot milk tea", "portion": "1 cup", "calories": 40, "protein": 2, "carbs": 7, "fat": 0, "fiber": 0 }
+      ]
+    },
+    {
+      "label": "Hearty",
+      "calories": 610,
+      "protein": 31,
+      "carbs": 66,
+      "fat": 24,
+      "fiber": 5,
+      "foods": [
+        { "name": "Tomato beef rice noodle soup", "portion": "1 bowl", "calories": 500, "protein": 27, "carbs": 58, "fat": 18, "fiber": 3 },
+        { "name": "Blanched choy sum", "portion": "1 plate", "calories": 45, "protein": 3, "carbs": 5, "fat": 1, "fiber": 2 },
+        { "name": "Unsweetened green tea", "portion": "1 cup", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "fiber": 0 }
+      ]
+    }
+  ]
+}
+
+Generate now. JSON only.`
+      } else {
+        prompt = `${languageInstruction}
+【必須】回傳格式：僅能回傳 { "options": [ 選項A, 選項B ] }，即 **恰好 2 個** 不同餐單物件。**禁止**回傳單一 { "meal": ... } 物件。
 
 ⭐⭐⭐ 用戶偏好（必須遵守，不可忽略）⭐⭐⭐
 1. 用餐地點：${locationText[location] || '外食'}
@@ -323,86 +391,22 @@ export async function POST(request: NextRequest) {
 ${customInput ? `6. 特別要求：${customInput}` : ''}
 
 CRITICAL 規則：
-- 若用戶選了「菜系」則主菜**必須**是該菜系，**不可**生成其他菜系：
-  - 港式(hk)：茶餐廳常見如沙嗲牛、餐蛋、米線、雲吞麵、碟頭飯、炒河、多士奶茶。
-  - 西式(western)：**只可**意粉、扒類(豬/雞/魚扒)、漢堡、沙律、焗飯、三文治、西湯；**禁止**沙嗲牛肉麵、中式炒飯、雲吞麵、茶餐廳常餐等中式食物。
-  - 日式(japanese)：定食、烏冬、拉麵、壽司、刺身、飯糰；禁止中式/港式。
-  - 韓式(korean)：拌飯、湯飯、部隊鍋、泡菜、韓式烤肉；禁止中式/港式。
-  - 泰式(thai)：泰式炒河、咖喱、冬蔭功、打拋豬；禁止中式/港式。
-- 若用戶選了「主食類型」則須符合：飯類→飯／炒飯／碟頭飯／煲仔飯；麵類→麵／米線／河粉／意粉；湯類→湯粉／湯飯／粥；輕食→多士／沙律／三明治／包點。
+- 若用戶選了「菜系」則主菜**必須**是該菜系，**不可**生成其他菜系。
+- 若用戶選了「主食類型」則須符合：飯類/麵類/湯類/輕食。
 - 不要每次都生成相同食物；在符合偏好的範圍內選擇不同菜式。
 
-你是一個專業的香港營養師。請根據**以上用戶偏好**，生成 **2 個** 不同的 ${mealNames[mealType]} 選項，每個選項都要具體、可執行（例如具體菜式名稱），讓用戶可以從中選一個加入餐單。
-
-目標卡路里參考：${currentMealTarget} 卡（±10% 即 ${Math.round(currentMealTarget * 0.9)}–${Math.round(currentMealTarget * 1.1)} 卡）
-${style === 'healthy' ? `
-**卡路里限制（用戶選擇了輕盈健康）**：兩個選項的卡路里**都必須**在目標 ±10% 內（即 ${Math.round(currentMealTarget * 0.9)}–${Math.round(currentMealTarget * 1.1)} 卡）。
-` : `
-**卡路里限制**：兩個選項中**至少一個**須在目標 ±10% 內（${Math.round(currentMealTarget * 0.9)}–${Math.round(currentMealTarget * 1.1)} 卡）；第二個選項可為「豐富版」，卡路里約 ${Math.round(currentMealTarget * (typeof secondOptionCalorieMultiplier === 'number' ? secondOptionCalorieMultiplier : 1.3))} 卡（約目標 × ${typeof secondOptionCalorieMultiplier === 'number' ? secondOptionCalorieMultiplier : 1.3}），以增加選擇多樣性。
-`}
-${requireDiversity ? `
-**多樣性（必須）**：兩個選項的**菜式必須明顯不同**（例如選項 A 沙嗲牛麵常餐、選項 B 鮮茄牛肉湯米線／餐蛋通粉／日式定食等），禁止兩個選項都是同一款（如都是沙嗲牛麵）。
-` : ''}
-
-${location === 'eating_out' ? `
-外食卡路里參考（嚴禁低估）：
-- 沙嗲牛肉麵、餐蛋麵、牛腩麵、星洲炒米等：每碟約 450–600 卡
-- 牛油多士、奶醬多、西多士：約 150–220 卡／份；熱奶茶、熱鴛鴦（少甜）：約 80–120 卡
-- 「沙嗲牛麵 + 多士 + 奶茶」總卡約 650–900 卡；「米線/湯麵」約 400–550 卡
-` : `
-自己煮：家常菜、易準備。卡路里依上方規則（輕盈健康則兩選項皆在目標±10%；否則至少一選項在目標±10%，另一可自由）。
-`}
-
-用戶營養目標（可依食物略為浮動）：蛋白質 ${targetProtein}g、碳水 ${targetCarbs}g、脂肪 ${targetFat}g、纖維 ${targetFiber}g。
-
-用戶飲食限制：
-${dietaryRestrictions && dietaryRestrictions.length > 0 ? `- 不吃：${dietaryRestrictions.map((r: string) => {
-  const names: Record<string, string> = {
-    beef: '牛肉', pork: '豬肉', chicken: '雞肉', seafood: '海鮮',
-    egg: '蛋類', dairy: '奶類', nuts: '堅果', soy: '大豆製品'
-  }
-  return names[r] || r
-}).join('、')}` : ''}
-${dietaryHabit && dietaryHabit !== 'none' ? `- 飲食習慣：${dietaryHabit}` : ''}
-${allergies && allergies.length > 0 ? `- 過敏：${allergies.join('、')}` : ''}
+請根據以上偏好，生成 2 個不同的 ${mealNames[mealType]} 選項，每個選項都要具體可執行。
+目標卡路里：${currentMealTarget} 卡（±10%）
+${requireDiversity ? '兩個選項必須明顯不同。' : ''}
 
 要求：
-1. **2 個選項必須不同**（不同菜式或組合，例如選項 A 沙嗲牛麵常餐、選項 B 鮮茄牛肉湯米線）。
-2. 使用香港常見食物和廣東話名稱，名稱具體（如「沙嗲牛麵常餐」「鮮茄牛肉湯米線」）。
-3. 每個選項 3–4 項食物，營養素須符合公式：卡路里 = 蛋白質×4 + 碳水×4 + 脂肪×9（誤差 ±60 卡可接受）。
-4. 各食物卡路里相加 = 該選項總卡路里（誤差 ±10 卡可接受）。
-5. **回傳**：只回傳一個 JSON 物件，鍵名必須是 \`options\`，值為陣列且**恰好 2 個**餐單。不要用 \`meal\` 鍵。
-
-回傳範例（純 JSON，不要其他文字）：
-{
-  "options": [
-    {
-      "calories": 520,
-      "protein": 28,
-      "carbs": 55,
-      "fat": 18,
-      "fiber": 3,
-      "foods": [
-        { "name": "沙嗲牛肉麵", "portion": "1碗", "calories": 480, "protein": 26, "carbs": 48, "fat": 18, "fiber": 2 },
-        { "name": "熱奶茶", "portion": "1杯", "calories": 40, "protein": 2, "carbs": 7, "fat": 0, "fiber": 0 }
-      ]
-    },
-    {
-      "calories": 500,
-      "protein": 24,
-      "carbs": 58,
-      "fat": 14,
-      "fiber": 4,
-      "foods": [
-        { "name": "鮮茄牛肉湯米線", "portion": "1碗", "calories": 420, "protein": 22, "carbs": 52, "fat": 12, "fiber": 3 },
-        { "name": "灼菜心", "portion": "1碟", "calories": 35, "protein": 2, "carbs": 4, "fat": 1, "fiber": 2 },
-        { "name": "無糖綠茶", "portion": "1杯", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "fiber": 0 }
-      ]
-    }
-  ]
-}
+1. 使用繁體中文（廣東話）食物名稱。
+2. 每個選項 3-4 項食物。
+3. 各食物卡路里相加 = 該選項總卡路里（小誤差可接受）。
+4. 回傳僅限 JSON，鍵名為 options，且恰好 2 個選項。
 
 請立即生成（純 JSON）：`
+      }
       console.log('📝 Quick mode prompt preview (first 600 chars):', prompt.substring(0, 600))
 
     } else {
@@ -410,7 +414,8 @@ ${allergies && allergies.length > 0 ? `- 過敏：${allergies.join('、')}` : ''
       const selectedStyle = style ? styleText[style] : ''
       const selectedTaste = taste ? tasteText[taste] : ''
       
-      prompt = `你是一個專業的香港營養師。
+      prompt = `${languageInstruction}
+你是一個專業的香港營養師。
 
 請為用戶推薦 3 個 ${mealNames[mealType]} 選項。
 
@@ -487,7 +492,7 @@ ${dietaryHabit && dietaryHabit !== 'none' ? `- 飲食習慣：${(() => {
 ${allergies && allergies.length > 0 ? `- 過敏：${allergies.join('、')}` : ''}
 
 要求：
-1. 使用香港常見食物和廣東話名稱
+1. ${isEnglish ? 'Use common foods and names in English.' : '使用香港常見食物和廣東話名稱'}
 2. ${location === 'eating_out' ? '外食選項（茶餐廳、快餐店等）；卡路里須依上述茶餐廳參考如實估算，**禁止低估**' : '家常菜（容易自己煮）'}
 3. 每個選項包含 3-4 項食物
 4. 遵守飲食限制
@@ -667,7 +672,7 @@ ${increaseRandomness ? `
             const generous = {
               ...standard,
               version: 'generous',
-              label: '豐富版',
+              label: isEnglish ? 'Hearty' : '豐富版',
               calories: Math.round((standard.calories ?? 0) * 1.15),
               protein: Math.round((standard.protein ?? 0) * 1.15),
               carbs: Math.round((standard.carbs ?? 0) * 1.15),
@@ -753,14 +758,16 @@ ${increaseRandomness ? `
         const errStr = lastError ?? ''
         const is429 = /429|Too Many Requests|Resource exhausted/i.test(errStr)
         console.error(`❌ Attempt ${attempt} failed:`, lastError)
+        if (is429) {
+          // 免費配額已耗盡時不再重試，直接回友好訊息
+          throw new Error('今日 AI 配額已用完，請明天再試')
+        }
         
         if (attempt === maxRetries) {
-          if (is429) throw new Error('請求過多，請稍後再試（AI 配額限制）')
           throw error as Error
         }
         
-        // 429 時延長等待再重試（2s、4s、6s）
-        const waitMs = is429 ? Math.min(2000 * attempt, 8000) : 1000
+        const waitMs = 1000
         console.log(`⏳ Waiting ${waitMs}ms before retry...`)
         await new Promise(resolve => setTimeout(resolve, waitMs))
       }
@@ -784,9 +791,9 @@ ${increaseRandomness ? `
     let errorMessage = '推薦失敗，請重試'
     let errorDetails = error.message || error.toString()
     
-    if (/429|Too Many Requests|Resource exhausted|請求過多/.test(errorDetails)) {
-      statusCode = 503
-      errorMessage = '請求過多，請稍後再試（AI 配額限制）'
+    if (/429|Too Many Requests|Resource exhausted|請求過多|配額已用完/.test(errorDetails)) {
+      statusCode = 429
+      errorMessage = '今日 AI 配額已用完，請明天再試'
     } else if (error.message?.includes('JSON') || error.message?.includes('格式')) {
       statusCode = 422  // Unprocessable Entity
       errorMessage = 'AI 返回格式錯誤，請重試'
