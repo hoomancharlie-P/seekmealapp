@@ -46,7 +46,7 @@ export async function callClaude(
 
     // Extract text content from the response
     const textContent = response.content
-      .filter((item): item is { type: 'text'; text: string } => item.type === 'text')
+      .filter((item): item is Anthropic.TextBlock => item.type === 'text')
       .map((item) => item.text)
       .join('')
 
